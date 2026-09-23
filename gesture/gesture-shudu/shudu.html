@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 手势数独 (多关卡版)</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', sans-serif; }
+        .container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; background: black;}
+        .input_video { display: none; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        .loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 24px; z-index: 100; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px;
+            text-align: center;
+        }
+        
+        .ui-guide {
+            position: absolute; top: 20px; left: 20px; z-index: 10; color: white;
+            background: rgba(0, 0, 0, 0.6); padding: 15px; border-radius: 10px; pointer-events: none;
+        }
+        .ui-guide h3 { margin: 0 0 10px 0; color: #00ff00; }
+        .ui-guide li { margin-bottom: 5px; }
+
+        /* 胜利弹窗 */
+        .modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9); color: white; padding: 40px; border-radius: 20px;
+            text-align: center; display: none; z-index: 200; border: 2px solid #00ff00;
+            box-shadow: 0 0 50px rgba(0, 255, 0, 0.3);
+            min-width: 300px;
+        }
+        
+        .modal h2 { margin-top: 0; font-size: 2em; color: #00ff00; }
+        
+        /* 按钮样式 */
+        .btn-group { margin-top: 30px; display: flex; justify-content: space-around; gap: 20px; }
+        
+        .game-btn {
+            padding: 15px 30px; border-radius: 50px; font-size: 1.2em; font-weight: bold;
+            border: 2px solid white; cursor: pointer; transition: transform 0.2s;
+        }
+        
+        /* 默认样式 */
+        .btn-next { background: #00aa00; color: white; }
+        .btn-quit { background: #aa0000; color: white; }
+
+        /* 手势悬停时的样式 (由JS添加类名) */
+        .game-btn.hover { transform: scale(1.1); box-shadow: 0 0 20px white; }
+        .game-btn.active { transform: scale(0.9); opacity: 0.8; }
+
+        /* 结束画面 */
+        .end-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: black; color: white; z-index: 300; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+    </style>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="loading" id="loading">正在加载 AI 模型...</div>
+    
+    <div class="ui-guide">
+        <h3>🧩 AI 手势数独</h3>
+        <div>关卡: <span id="levelDisplay">1</span> / 2</div>
+        <div id="statusMsg" style="margin-top:10px; color: yellow;">状态: 等待手势...</div>
+    </div>
+
+    <div class="modal" id="winModal">
+        <h2>🎉 挑战成功！</h2>
+        <p>你的手速和脑力都很快！</p>
+        <div class="btn-group">
+            <div id="btnQuit" class="game-btn btn-quit">结束游戏</div>
+            <div id="btnNext" class="game-btn btn-next">再来一关</div>
+        </div>
+    </div>
+
+    <div class="end-screen" id="endScreen">
+        <h1 style="font-size: 4em; color: #00ff00;">GAME OVER</h1>
+        <p style="font-size: 2em;">👋 感谢游玩！</p>
+    </div>
+
+    <div class="container">
+        <video class="input_video"></video>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        const videoElement = document.getElementsByClassName('input_video')[0];
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusMsg = document.getElementById('statusMsg');
+        const winModal = document.getElementById('winModal');
+        const btnNext = document.getElementById('btnNext');
+        const btnQuit = document.getElementById('btnQuit');
+        const endScreen = document.getElementById('endScreen');
+        const levelDisplay = document.getElementById('levelDisplay');
+
+        // --- 关卡数据 ---
+        const levels = [
+            // Level 1: 极简入门
+            {
+                solution: [
+                    [5, 3, 4, 6, 7, 8, 9, 1, 2],
+                    [6, 7, 2, 1, 9, 5, 3, 4, 8],
+                    [1, 9, 8, 3, 4, 2, 5, 6, 7],
+                    [8, 5, 9, 7, 6, 1, 4, 2, 3],
+                    [4, 2, 6, 8, 5, 3, 7, 9, 1],
+                    [7, 1, 3, 9, 2, 4, 8, 5, 6],
+                    [9, 6, 1, 5, 3, 7, 2, 8, 4],
+                    [2, 8, 7, 4, 1, 9, 6, 3, 5],
+                    [3, 4, 5, 2, 8, 6, 1, 7, 9]
+                ],
+                initial: [
+                    [5, 3, 0, 6, 7, 8, 9, 0, 2],
+                    [6, 7, 2, 1, 9, 5, 3, 4, 8],
+                    [1, 9, 8, 3, 0, 2, 5, 6, 7],
+                    [8, 5, 0, 7, 6, 1, 4, 2, 3],
+                    [4, 2, 6, 8, 0, 3, 7, 9, 1],
+                    [7, 1, 3, 9, 2, 4, 0, 5, 6],
+                    [9, 6, 1, 5, 3, 7, 2, 8, 4],
+                    [2, 8, 7, 4, 1, 9, 6, 0, 5],
+                    [3, 4, 5, 2, 8, 6, 1, 7, 9]
+                ]
+            },
+            // Level 2: 稍微多几个空
+            {
+                solution: [
+                    [2, 9, 5, 7, 4, 3, 8, 6, 1],
+                    [4, 3, 1, 8, 6, 5, 9, 0, 0], // 注意：这里为了演示方便，solution 也可以不校验完整性，主要看 logic
+                    [8, 7, 6, 1, 9, 2, 5, 4, 3],
+                    [3, 8, 7, 4, 5, 9, 2, 1, 6],
+                    [6, 1, 2, 3, 8, 7, 4, 9, 5],
+                    [5, 4, 9, 2, 1, 6, 7, 3, 8],
+                    [7, 6, 3, 5, 2, 4, 1, 8, 9],
+                    [9, 2, 8, 6, 7, 1, 3, 5, 4],
+                    [1, 5, 4, 9, 3, 8, 6, 7, 2]
+                ],
+                // 这里的 solution 其实是用来校验的，为了代码简单，我直接 hardcode level 2
+                // Level 2 Initial (假定 solution 是完整的，这里只挖空一部分)
+                initial: [
+                    [2, 9, 0, 7, 4, 0, 8, 6, 1],
+                    [4, 3, 1, 8, 6, 5, 9, 2, 7],
+                    [8, 7, 6, 1, 9, 2, 5, 4, 3],
+                    [3, 8, 7, 4, 5, 9, 2, 1, 6],
+                    [6, 1, 2, 3, 8, 7, 4, 9, 5],
+                    [5, 4, 9, 2, 1, 6, 7, 3, 8],
+                    [7, 6, 3, 5, 2, 4, 1, 8, 9],
+                    [9, 2, 8, 6, 7, 1, 3, 5, 4],
+                    [1, 5, 4, 9, 3, 8, 6, 7, 2]
+                ] 
+            }
+        ];
+
+        // 修正 Level 2 的 Solution (手动补全以防止 bug)
+        levels[1].solution[1][7] = 2;
+        levels[1].solution[1][8] = 7;
+
+        let currentLevelIdx = 0;
+        let currentBoard, fixedMask, solutionBoard;
+        
+        // 游戏状态
+        let gameMode = 'playing'; // 'playing', 'won', 'ended'
+        
+        // UI 参数
+        let GRID_SIZE, CELL_SIZE, GRID_OFFSET_X, GRID_OFFSET_Y;
+        let handX = 0, handY = 0;
+        let isPinching = false, pinchCooldown = false;
+        let hoveredCell = null, selectedCell = null, hoveredNumpad = null;
+
+        // 初始化关卡
+        function loadLevel(index) {
+            if (index >= levels.length) index = 0; // 循环或结束
+            currentLevelIdx = index;
+            levelDisplay.innerText = index + 1;
+            
+            // 深拷贝数据
+            currentBoard = JSON.parse(JSON.stringify(levels[index].initial));
+            solutionBoard = levels[index].solution;
+            fixedMask = levels[index].initial.map(row => row.map(cell => cell !== 0));
+            
+            // 重置状态
+            gameMode = 'playing';
+            winModal.style.display = 'none';
+            selectedCell = null;
+            statusMsg.innerText = "状态: 游戏开始";
+        }
+
+        // 启动第一关
+        loadLevel(0);
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            GRID_SIZE = Math.min(canvas.width, canvas.height) * 0.8;
+            CELL_SIZE = GRID_SIZE / 9;
+            GRID_OFFSET_X = (canvas.width - GRID_SIZE) / 2;
+            GRID_OFFSET_Y = (canvas.height - GRID_SIZE) / 2;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- 交互逻辑 ---
+
+        // 检查手势是否在 HTML 元素上
+        function isHandOverElement(element) {
+            const rect = element.getBoundingClientRect();
+            // 因为 handX/Y 是基于 Canvas(全屏) 的，所以直接比较
+            return (handX >= rect.left && handX <= rect.right &&
+                    handY >= rect.top && handY <= rect.bottom);
+        }
+
+        function handlePinch() {
+            if (pinchCooldown) return;
+            pinchCooldown = true;
+            setTimeout(() => pinchCooldown = false, 300);
+
+            // 分支 1：游戏胜利状态，处理按钮点击
+            if (gameMode === 'won') {
+                if (isHandOverElement(btnNext)) {
+                    btnNext.classList.add('active');
+                    setTimeout(() => btnNext.classList.remove('active'), 200);
+                    // 逻辑：再来一关
+                    if (currentLevelIdx < levels.length - 1) {
+                        loadLevel(currentLevelIdx + 1);
+                    } else {
+                        // 如果关卡都玩完了，重新开始第一关 (或者也可以结束)
+                        loadLevel(0);
+                    }
+                }
+                if (isHandOverElement(btnQuit)) {
+                    btnQuit.classList.add('active');
+                    winModal.style.display = 'none';
+                    endScreen.style.display = 'flex'; // 显示 Flex 布局
+                    gameMode = 'ended';
+                }
+                return;
+            }
+
+            // 分支 2：游戏进行中
+            if (gameMode === 'playing') {
+                if (selectedCell && hoveredNumpad !== null) {
+                    currentBoard[selectedCell.r][selectedCell.c] = hoveredNumpad;
+                    selectedCell = null;
+                    hoveredNumpad = null;
+                    statusMsg.innerText = "状态: 数字已填入";
+                    checkWinCondition();
+                } else if (hoveredCell && !fixedMask[hoveredCell.r][hoveredCell.c]) {
+                    selectedCell = hoveredCell;
+                    statusMsg.innerText = "状态: 请选择数字";
+                } else {
+                    selectedCell = null;
+                    statusMsg.innerText = "状态: 移动光标";
+                }
+            }
+        }
+
+        function checkWinCondition() {
+            let isFull = true;
+            let isCorrect = true;
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (currentBoard[r][c] === 0) isFull = false;
+                    else if (currentBoard[r][c] !== solutionBoard[r][c]) isCorrect = false;
+                }
+            }
+            if (isFull) {
+                if (isCorrect) {
+                    gameMode = 'won';
+                    winModal.style.display = 'block';
+                    statusMsg.innerText = "状态: 恭喜过关！";
+                } else {
+                    statusMsg.innerText = "状态: 有错误，请检查！";
+                    statusMsg.style.color = "red";
+                }
+            }
+        }
+
+        // --- 绘图函数 ---
+        // (保持原有的 drawGrid, drawNumbers, drawHighlights, drawNumpad)
+        function drawGrid() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            for (let i = 0; i <= 9; i++) {
+                ctx.lineWidth = (i % 3 === 0) ? 4 : 1;
+                const pos = i * CELL_SIZE;
+                ctx.beginPath(); ctx.moveTo(GRID_OFFSET_X, GRID_OFFSET_Y + pos); ctx.lineTo(GRID_OFFSET_X + GRID_SIZE, GRID_OFFSET_Y + pos); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(GRID_OFFSET_X + pos, GRID_OFFSET_Y); ctx.lineTo(GRID_OFFSET_X + pos, GRID_OFFSET_Y + GRID_SIZE); ctx.stroke();
+            }
+        }
+        function drawNumbers() {
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `bold ${CELL_SIZE * 0.6}px sans-serif`;
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const val = currentBoard[r][c];
+                    if (val === 0) continue;
+                    const x = GRID_OFFSET_X + c * CELL_SIZE + CELL_SIZE / 2;
+                    const y = GRID_OFFSET_Y + r * CELL_SIZE + CELL_SIZE / 2;
+                    ctx.fillStyle = fixedMask[r][c] ? '#aaa' : '#fff';
+                    ctx.fillText(val, x, y);
+                }
+            }
+        }
+        function drawHighlights() {
+            if (hoveredCell && !selectedCell) {
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+                ctx.fillRect(GRID_OFFSET_X + hoveredCell.c * CELL_SIZE, GRID_OFFSET_Y + hoveredCell.r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+            if (selectedCell) {
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+                ctx.fillRect(GRID_OFFSET_X + selectedCell.c * CELL_SIZE, GRID_OFFSET_Y + selectedCell.r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+        }
+        function drawNumpad() {
+            if (!selectedCell) return;
+            const padSize = CELL_SIZE * 3;
+            let padX = GRID_OFFSET_X + selectedCell.c * CELL_SIZE - CELL_SIZE;
+            let padY = GRID_OFFSET_Y + selectedCell.r * CELL_SIZE - CELL_SIZE;
+            if (padX < 0) padX = 0; if (padY < 0) padY = 0; if (padX + padSize > canvas.width) padX = canvas.width - padSize; if (padY + padSize > canvas.height) padY = canvas.height - padSize;
+
+            ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fillRect(padX, padY, padSize, padSize);
+            ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 3; ctx.strokeRect(padX, padY, padSize, padSize);
+            hoveredNumpad = null;
+            ctx.fillStyle = 'white'; ctx.font = `bold ${CELL_SIZE * 0.5}px sans-serif`;
+
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    const num = i * 3 + j + 1;
+                    const cellX = padX + j * CELL_SIZE;
+                    const cellY = padY + i * CELL_SIZE;
+                    if (handX > cellX && handX < cellX + CELL_SIZE && handY > cellY && handY < cellY + CELL_SIZE) {
+                        ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
+                        ctx.fillRect(cellX, cellY, CELL_SIZE, CELL_SIZE);
+                        ctx.fillStyle = 'white';
+                        hoveredNumpad = num;
+                    }
+                    ctx.fillText(num, cellX + CELL_SIZE / 2, cellY + CELL_SIZE / 2);
+                }
+            }
+        }
+
+        // --- 主循环 ---
+        function onResults(results) {
+            document.getElementById('loading').style.display = 'none';
+
+            // 1. 绘制背景和骨骼 (镜像)
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 3});
+                    drawLandmarks(ctx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 4});
+                }
+            }
+            ctx.restore();
+
+            if (gameMode === 'ended') return; // 结束画面已由 HTML 覆盖，不再绘制游戏内容
+
+            // 2. 绘制游戏内容 (UI 层)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(GRID_OFFSET_X, GRID_OFFSET_Y, GRID_SIZE, GRID_SIZE);
+            drawHighlights();
+            drawGrid();
+            drawNumbers();
+            drawNumpad();
+
+            // 3. 手势逻辑
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const indexFinger = landmarks[8];
+                const thumb = landmarks[4];
+                handX = (1 - indexFinger.x) * canvas.width;
+                handY = indexFinger.y * canvas.height;
+
+                const distance = Math.hypot((indexFinger.x - thumb.x), (indexFinger.y - thumb.y));
+                const nowPinching = distance < 0.05;
+
+                // 交互处理
+                if (nowPinching && !isPinching) {
+                    handlePinch();
+                }
+                isPinching = nowPinching;
+
+                // 悬停检测 (分模式)
+                if (gameMode === 'won') {
+                    // 按钮高亮检测
+                    if (isHandOverElement(btnNext)) btnNext.classList.add('hover');
+                    else btnNext.classList.remove('hover');
+                    
+                    if (isHandOverElement(btnQuit)) btnQuit.classList.add('hover');
+                    else btnQuit.classList.remove('hover');
+                } 
+                else if (gameMode === 'playing') {
+                    // 棋盘悬停检测
+                    hoveredCell = null;
+                    if (!selectedCell && handX > GRID_OFFSET_X && handX < GRID_OFFSET_X + GRID_SIZE && handY > GRID_OFFSET_Y && handY < GRID_OFFSET_Y + GRID_SIZE) {
+                        const c = Math.floor((handX - GRID_OFFSET_X) / CELL_SIZE);
+                        const r = Math.floor((handY - GRID_OFFSET_Y) / CELL_SIZE);
+                        hoveredCell = { r, c };
+                    }
+                }
+
+                // 绘制光标
+                ctx.beginPath();
+                ctx.arc(handX, handY, 10, 0, 2 * Math.PI);
+                // 捏合变绿，普通白色
+                ctx.fillStyle = isPinching ? '#00FF00' : 'rgba(255, 255, 255, 0.9)';
+                ctx.fill();
+                ctx.strokeStyle = 'black'; ctx.stroke();
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 1280, height: 720
+        });
+        camera.start();
+    </script>
+</body>
+</html>

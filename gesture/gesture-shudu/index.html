@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 巨型全息 (120碎片版)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Microsoft YaHei', sans-serif; }
+        .container { position: relative; width: 100vw; height: 100vh; }
+        .input_video { display: none; }
+        
+        #bgCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; filter: brightness(0.6); }
+        #threeCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+        
+        /* HUD 面板 */
+        .hud-panel { 
+            position: absolute; top: 30px; left: 30px; z-index: 10; 
+            background: rgba(0, 30, 60, 0.7); 
+            border: 1px solid rgba(0, 255, 255, 0.3); 
+            border-left: 4px solid #00ffff; 
+            color: #00ffff; padding: 20px; border-radius: 4px; 
+            backdrop-filter: blur(10px); min-width: 280px; 
+            box-shadow: 0 0 30px rgba(0,255,255,0.1);
+            transform: skewX(-5deg);
+        }
+        .status-dot { display: inline-block; width: 10px; height: 10px; background: #333; border-radius: 50%; margin-right: 8px; transition: all 0.3s; }
+        .status-dot.active-r { background: #00ff00; box-shadow: 0 0 10px #00ff00; }
+        .status-dot.active-l { background: #ff00ff; box-shadow: 0 0 10px #ff00ff; }
+        
+        /* 距离指示条 */
+        .proximity-bar-bg { width: 100%; height: 6px; background: #333; margin-top: 10px; border-radius: 3px; overflow: hidden; }
+        .proximity-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #00ffff, #ff0000); transition: width 0.1s; }
+        .warning-text { color: #ff3333; font-weight: bold; display: none; margin-top: 5px; animation: blink 0.1s infinite; text-align: center;}
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        #loadingLayer { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.95); z-index: 999; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; color: #00ffff; 
+        }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+</head>
+<body>
+
+    <div id="loadingLayer">
+        <div style="font-size: 2em; font-weight: bold; margin-bottom: 20px;">SYSTEM INITIALIZING</div>
+        <div>加载全息引擎 (轻量化粒子)...</div>
+    </div>
+
+    <div class="hud-panel">
+        <h3 style="margin:0 0 15px 0; color:white;">全息控制台 (120碎片)</h3>
+        <div style="margin-bottom:5px;"><span><span id="dotL" class="status-dot"></span>左手捏合</span> : 平移</div>
+        <div style="margin-bottom:15px;"><span><span id="dotR" class="status-dot"></span>右手捏合</span> : 旋转</div>
+        <hr style="border-color: rgba(0,255,255,0.2);">
+        
+        <div style="font-size: 0.9em; margin-top: 10px; color: #ccc;">双手距离监测:</div>
+        <div class="proximity-bar-bg">
+            <div id="proxBar" class="proximity-bar-fill"></div>
+        </div>
+        <div id="warn" class="warning-text">⚠️ 融合反应：炸裂！！！</div>
+    </div>
+
+    <div class="container">
+        <video class="input_video" playsinline></video>
+        <canvas id="bgCanvas"></canvas>
+        <canvas id="threeCanvas"></canvas>
+    </div>
+
+    <script>
+        const bgCanvas = document.getElementById('bgCanvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        const videoElement = document.getElementsByClassName('input_video')[0];
+        const dotL = document.getElementById('dotL');
+        const dotR = document.getElementById('dotR');
+        const warnDiv = document.getElementById('warn');
+        const proxBar = document.getElementById('proxBar');
+        const loadingLayer = document.getElementById('loadingLayer');
+
+        let rh = { pin: false, lx: 0, ly: 0 }, lh = { pin: false, lx: 0, ly: 0 };
+        let tRot = { x: 0, y: 0 }, tPos = { x: 0, y: 0 };
+        let isExploded = false;
+        let explosionParticles = [];
+        let explosionStartTime = 0;
+
+        // --- Three.js 初始化 ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera.position.z = 18;
+        const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas'), alpha:true, antialias:true});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        const mainGroup = new THREE.Group();
+        // 物体设置
+        const cube = new THREE.Mesh(new THREE.BoxGeometry(6,6,6), new THREE.MeshPhongMaterial({color:0x00aaff, transparent:true, opacity:0.8}));
+        cube.position.x = -5.0; 
+        mainGroup.add(cube);
+        
+        const tetra = new THREE.Mesh(new THREE.TetrahedronGeometry(5.5), new THREE.MeshPhongMaterial({color:0xff5500, transparent:true, opacity:0.6}));
+        tetra.position.x = 5.0; 
+        mainGroup.add(tetra);
+        
+        scene.add(mainGroup);
+        const particleGroup = new THREE.Group();
+        scene.add(particleGroup);
+        scene.add(new THREE.DirectionalLight(0xffffff, 1.2));
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // --- 爆炸逻辑 ---
+        function triggerExplosion() {
+            if (isExploded) return;
+            isExploded = true;
+            explosionStartTime = Date.now();
+            warnDiv.style.display = 'block';
+            mainGroup.visible = false; 
+
+            // 生成碎片
+            const createDebris = (pos, color, shape) => {
+                const geo = shape==='box' ? new THREE.BoxGeometry(0.7,0.7,0.7) : new THREE.TetrahedronGeometry(0.7);
+                const mat = new THREE.MeshBasicMaterial({color:color, wireframe:true});
+                
+                // ✅ 修改点：这里改为 60，即每个物体生成 60 个碎片
+                for(let i=0; i<60; i++) {
+                    const m = new THREE.Mesh(geo, mat);
+                    m.position.copy(pos).add(mainGroup.position).add(new THREE.Vector3((Math.random()-0.5)*6, (Math.random()-0.5)*6, (Math.random()-0.5)*6));
+                    m.userData.vel = new THREE.Vector3((Math.random()-0.5)*3, (Math.random()-0.5)*3, (Math.random()-0.5)*3);
+                    particleGroup.add(m);
+                    explosionParticles.push(m);
+                }
+            };
+            createDebris(cube.position, 0x00aaff, 'box');
+            createDebris(tetra.position, 0xff5500, 'tetra');
+        }
+
+        function resetScene() {
+            setTimeout(() => {
+                isExploded = false; mainGroup.visible = true; warnDiv.style.display = 'none';
+            }, 2000); 
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isExploded) {
+                mainGroup.rotation.y += (tRot.x - mainGroup.rotation.y)*0.1;
+                mainGroup.rotation.x += (tRot.y - mainGroup.rotation.x)*0.1;
+                mainGroup.position.x += (tPos.x - mainGroup.position.x)*0.1;
+                mainGroup.position.y += (tPos.y - mainGroup.position.y)*0.1;
+                if(!rh.pin && !lh.pin) { tRot.x += 0.002; cube.rotation.y += 0.005; tetra.rotation.z -= 0.005; }
+            } else {
+                // 爆炸持续 5 秒
+                const elapsed = Date.now() - explosionStartTime;
+                if (elapsed < 5000) {
+                    explosionParticles.forEach(p => {
+                        p.position.add(p.userData.vel);
+                        p.rotation.x += 0.1; p.rotation.y += 0.1;
+                        p.userData.vel.multiplyScalar(0.98);
+                    });
+                } else if (explosionParticles.length > 0) {
+                    explosionParticles.forEach(p => particleGroup.remove(p));
+                    explosionParticles = [];
+                    resetScene();
+                }
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight;
+        }
+        bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight;
+
+        // --- AI 处理 ---
+        function onResults(results) {
+            loadingLayer.style.display = 'none';
+            bgCtx.save(); bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height);
+            bgCtx.translate(bgCanvas.width,0); bgCtx.scale(-1,1);
+            bgCtx.drawImage(results.image,0,0,bgCanvas.width,bgCanvas.height);
+            
+            dotL.className = "status-dot"; dotR.className = "status-dot";
+            let leftHandPoint = null;
+            let rightHandPoint = null;
+
+            if(results.multiHandLandmarks) {
+                for(let i=0; i<results.multiHandLandmarks.length; i++) {
+                    const lm = results.multiHandLandmarks[i];
+                    const label = results.multiHandedness[i].label;
+                    const palmCenter = lm[9]; 
+                    
+                    if (label === 'Left') leftHandPoint = palmCenter;
+                    else rightHandPoint = palmCenter;
+
+                    if(window.drawConnectors && window.drawLandmarks) {
+                        const lineColor = isExploded ? '#FF0000' : (label==='Right'?'#00FF00':'#FF00FF');
+                        const dotColor = isExploded ? '#FF0000' : '#FFFFFF';
+
+                        drawConnectors(bgCtx, lm, HAND_CONNECTIONS, {color: lineColor, lineWidth: 3});
+                        drawLandmarks(bgCtx, lm, {color: dotColor, fillColor: dotColor, lineWidth: 1, radius: 2});
+                    }
+
+                    if (!isExploded) {
+                        const idx = lm[8], th = lm[4];
+                        const sx = (1-idx.x)*bgCanvas.width, sy = idx.y*bgCanvas.height;
+                        const pin = Math.hypot(idx.x-th.x, idx.y-th.y) < 0.06;
+
+                        if(label === 'Right') { 
+                            dotR.className = pin ? "status-dot active-r" : "status-dot";
+                            if(pin && rh.pin) { tRot.x += (sx - rh.lx)*0.01; tRot.y += (sy - rh.ly)*0.01; }
+                            rh.pin = pin; rh.lx = sx; rh.ly = sy;
+                        } else { 
+                            dotL.className = pin ? "status-dot active-l" : "status-dot";
+                            if(pin && lh.pin) { tPos.x += (sx - lh.lx)*0.02; tPos.y -= (sy - lh.ly)*0.02; }
+                            lh.pin = pin; lh.lx = sx; lh.ly = sy;
+                        }
+                    }
+                }
+            }
+
+            let distance = 1.0;
+            if (leftHandPoint && rightHandPoint) {
+                const dx = leftHandPoint.x - rightHandPoint.x;
+                const dy = leftHandPoint.y - rightHandPoint.y;
+                distance = Math.sqrt(dx*dx + dy*dy);
+            }
+
+            const triggerDistance = 0.18; 
+            const maxDistance = 0.5;
+            
+            const range = Math.max(0, Math.min(1, (maxDistance - distance) / (maxDistance - triggerDistance))); 
+            proxBar.style.width = (range * 100) + "%";
+
+            if (leftHandPoint && rightHandPoint && distance < triggerDistance && !isExploded) {
+                triggerExplosion();
+            }
+
+            bgCtx.restore();
+        }
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        hands.onResults(onResults);
+
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 1280, height: 720
+        });
+        cameraUtils.start();
+    </script>
+</body>
+</html>

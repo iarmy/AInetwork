@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太阳系三维动画演示</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111622;
+            color: #fff;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            overflow: hidden;
+        }
+        h1 {
+            font-weight: 400;
+            letter-spacing: 2px;
+            margin-bottom: 0.5em;
+        }
+        #solar-container {
+            width: 100vw;
+            height: 90vh;
+            position: relative;
+            background: radial-gradient(ellipse at center, #23243a 60%, #0a0a18 100%);
+            box-shadow: 0 0 40px #0008 inset;
+            overflow: hidden;
+        }
+        .planet-label {
+            position: absolute;
+            color: #fff;
+            background: rgba(0,0,0,0.6);
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 15px;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+        }
+        .auto-rotate-btn {
+            position: absolute;
+            top: 18px;
+            right: 32px;
+            z-index: 10;
+            background: #23243aee;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 6px 18px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .auto-rotate-btn:hover {
+            background: #3a3d5a;
+        }
+        .planet-popup {
+            position: fixed;
+            left: 50%;
+            top: 38%;
+            transform: translate(-50%, -50%);
+            background: #23243acc;
+            color: #fff;
+            padding: 22px 30px 18px 30px;
+            border-radius: 16px;
+            box-shadow: 0 0 30px #111b;
+            font-size: 17px;
+            min-width: 220px;
+            max-width: 90vw;
+            z-index: 100;
+            display: none;
+        }
+        .planet-popup h2 {
+            margin: 0 0 10px 0;
+            font-size: 22px;
+        }
+        .planet-popup button {
+            margin-top: 18px;
+            padding: 6px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: none;
+            background: #e53935;
+            color: #fff;
+            cursor: pointer;
+            float: right;
+        }
+        .star-bg {
+            position: absolute;
+            left: 0; top: 0; width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+    ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body>
+    <h1 style="text-align:center; color:#fff; margin-top:10px;">太阳系运行示意图（可拖动旋转观察）</h1>
+    <div id="solar-container"></div>
+    <button class="auto-rotate-btn" id="autoRotateBtn">自动旋转：开</button>
+    <div class="view-btn-group" style="position:absolute;top:18px;left:32px;z-index:10;">
+      <button class="view-btn" data-view="top">俯视</button>
+      <button class="view-btn" data-view="side">侧视</button>
+      <button class="view-btn" data-view="earth">地球视角</button>
+      <button class="view-btn" data-view="sun">太阳视角</button>
+    </div>
+    <div id="planetPopup" class="planet-popup"></div>
+    <canvas class="star-bg" id="starBg"></canvas>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/controls/OrbitControls.min.js"></script>
+    <script>
+// ===== 星空背景绘制 =====
+function drawStars() {
+    const c = document.getElementById('starBg');
+    const w = window.innerWidth, h = window.innerHeight;
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0,0,w,h);
+    for(let i=0;i<320;i++){
+        let x=Math.random()*w, y=Math.random()*h, r=Math.random()*0.8+0.2, a=Math.random();
+        ctx.beginPath();
+        ctx.arc(x,y,r,0,2*Math.PI);
+        ctx.fillStyle = `rgba(255,255,255,${a*0.8+0.2})`;
+        ctx.fill();
+    }
+}
+window.addEventListener('resize', drawStars);
+drawStars();
+
+// ===== 太阳系主动画 =====
+let scene, camera, renderer, controls;
+let sun, moon, moonOrbit = null;
+const planets = [];
+const planetLabels = [];
+const planetData = [
+  { name: '水星', en: 'Mercury', orbit: 12, radius: 0.6, period: 8, color: 0xb1b1b1, intro: '太阳系八大行星中最靠近太阳的行星。无卫星。' },
+  { name: '金星', en: 'Venus', orbit: 16, radius: 0.9, period: 20, color: 0xeccc9a, intro: '与地球最相似的行星，被厚厚的云层包裹。无卫星。' },
+  { name: '地球', en: 'Earth', orbit: 20, radius: 1, period: 30, color: 0x3399ff, intro: '人类的家园，是太阳系唯一已知存在生命的行星。拥有一颗卫星——月球。' },
+  { name: '火星', en: 'Mars', orbit: 25, radius: 0.8, period: 56, color: 0xff5533, intro: '被称为“红色星球”，有两个小卫星。' },
+  { name: '木星', en: 'Jupiter', orbit: 34, radius: 2.5, period: 140, color: 0xd6c08d, intro: '太阳系中体积和质量最大的行星，有79颗卫星。' },
+  { name: '土星', en: 'Saturn', orbit: 42, radius: 2.1, period: 350, color: 0xe5d29c, intro: '以壮观的光环著称，拥有82颗卫星。' },
+  { name: '天王星', en: 'Uranus', orbit: 50, radius: 1.5, period: 700, color: 0x7adfff, intro: '自转轴几乎平躺，拥有27颗卫星。' },
+  { name: '海王星', en: 'Neptune', orbit: 58, radius: 1.4, period: 1100, color: 0x4666ff, intro: '太阳系最远的行星，拥有14颗卫星。' }
+];
+const planetIntroEn = {
+  '水星': 'The closest planet to the Sun. No moons.',
+  '金星': 'The planet most similar to Earth, covered by thick clouds. No moons.',
+  '地球': 'Our home, the only known planet with life. Has one moon.',
+  '火星': 'The "Red Planet", has two small moons.',
+  '木星': 'The largest planet in the Solar System, has 79 moons.',
+  '土星': 'Famous for its rings, has 82 moons.',
+  '天王星': 'Axis almost lies flat, has 27 moons.',
+  '海王星': 'The farthest planet from the Sun, has 14 moons.'
+};
+let autoRotate = true;
+function init() {
+  scene = new THREE.Scene();
+  scene.background = null;
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+  camera.position.set(0, 30, 90);
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.getElementById('solar-container').appendChild(renderer.domElement);
+  // 光源
+  const light = new THREE.PointLight(0xffffff, 2, 0);
+  light.position.set(0, 0, 0);
+  scene.add(light);
+  scene.add(new THREE.AmbientLight(0x333344, 0.6));
+  // 太阳
+  const sunGeo = new THREE.SphereGeometry(4, 32, 32);
+  const sunMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+  sun = new THREE.Mesh(sunGeo, sunMat);
+  scene.add(sun);
+  // 太阳光晕Sprite
+  let glowTex;
+  try {
+    glowTex = new THREE.TextureLoader().load('sun-glow.png');
+  } catch (e) { glowTex = null; }
+  if (!glowTex || !glowTex.image) {
+    // 没有图片则用canvas生成径向渐变
+    const size = 256;
+    const cvs = document.createElement('canvas');
+    cvs.width = cvs.height = size;
+    const ctx = cvs.getContext('2d');
+    const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+    grad.addColorStop(0, 'rgba(255,255,200,0.55)');
+    grad.addColorStop(0.5, 'rgba(255,200,0,0.18)');
+    grad.addColorStop(1, 'rgba(255,200,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,size,size);
+    glowTex = new THREE.CanvasTexture(cvs);
+  }
+  const glowMat = new THREE.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, depthWrite: false });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.set(19, 19, 1); // 比太阳大
+  glow.position.set(0,0,0);
+  scene.add(glow);
+  // 行星和轨道
+  planetData.forEach((data, idx) => {
+    const geo = new THREE.SphereGeometry(data.radius, 24, 24);
+    const mat = new THREE.MeshLambertMaterial({ color: data.color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.x = data.orbit;
+    mesh.userData.idx = idx;
+    scene.add(mesh);
+    // 轨道
+    const curve = new THREE.EllipseCurve(0, 0, data.orbit, data.orbit, 0, 2 * Math.PI, false, 0);
+    const points = curve.getPoints(100);
+    const orbitGeo = new THREE.BufferGeometry().setFromPoints(points.map(p => new THREE.Vector3(p.x, 0, p.y)));
+    const orbitMat = new THREE.LineBasicMaterial({ color: 0x888888 });
+    const orbit = new THREE.Line(orbitGeo, orbitMat);
+    scene.add(orbit);
+    planets.push({ mesh, data });
+    // 标签
+    const label = document.createElement('div');
+    label.className = 'planet-label';
+    label.innerText = data.name;
+    document.getElementById('solar-container').appendChild(label);
+    planetLabels.push(label);
+  });
+  // 月球
+  const moonGeo = new THREE.SphereGeometry(0.27, 18, 18);
+  const moonMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+  moon = new THREE.Mesh(moonGeo, moonMat);
+  moonOrbit = { radius: 2, period: 3.5 };
+  scene.add(moon);
+  // 控制器
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.enablePan = false;
+  controls.minDistance = 20;
+  controls.maxDistance = 140;
+  controls.autoRotate = autoRotate;
+  controls.autoRotateSpeed = 0.8;
+  window.addEventListener('resize', onWindowResize);
+  // 点击事件
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  document.getElementById('autoRotateBtn').onclick = () => {
+    autoRotate = !autoRotate;
+    controls.autoRotate = autoRotate;
+    document.getElementById('autoRotateBtn').innerText = '自动旋转：' + (autoRotate ? '开' : '关');
+  };
+}
+function animate() {
+  requestAnimationFrame(animate);
+  const t = Date.now() * 0.001;
+  planets.forEach((p, i) => {
+    // 公转
+    const angle = (t / p.data.period) * 2 * Math.PI;
+    p.mesh.position.x = Math.cos(angle) * p.data.orbit;
+    p.mesh.position.z = Math.sin(angle) * p.data.orbit;
+    // 自转
+    p.mesh.rotation.y += 0.005 + 0.001 * i;
+    // 标签跟随+连线+动态缩放
+    updateLabelPosition(p.mesh, planetLabels[i], i);
+  });
+  // 月球绕地球
+  const earth = planets[2].mesh;
+  const moonAngle = (t / moonOrbit.period) * 2 * Math.PI;
+  moon.position.x = earth.position.x + Math.cos(moonAngle) * moonOrbit.radius;
+  moon.position.z = earth.position.z + Math.sin(moonAngle) * moonOrbit.radius;
+  moon.position.y = earth.position.y + 0.2;
+  moon.rotation.y += 0.015;
+  // 标签跟随月球
+  // controls update
+  controls.update();
+  renderer.render(scene, camera);
+}
+function updateLabelPosition(mesh, label, idx) {
+  const width = renderer.domElement.width, height = renderer.domElement.height;
+  const meshPos = mesh.position.clone();
+  // 标签上方偏移
+  const labelWorld = meshPos.clone();
+  labelWorld.y += mesh.geometry.parameters.radius * 3.5;
+  // 屏幕坐标
+  const vector = labelWorld.project(camera);
+  const x = (vector.x * 0.5 + 0.5) * width;
+  const y = ( -vector.y * 0.5 + 0.5) * height;
+  label.style.left = x + 'px';
+  label.style.top = y + 'px';
+  label.style.display = (vector.z > 1 || vector.z < -1) ? 'none' : 'block';
+  // 动态缩放字体
+  const camDist = camera.position.distanceTo(meshPos);
+  let fs = 15 * (60 / camDist); // 近大远小
+  fs = Math.max(12, Math.min(28, fs));
+  label.style.fontSize = fs + 'px';
+  // 绘制连线
+  drawLabelLine(idx, meshPos, labelWorld, x, y);
+}
+// 标签连线canvas初始化
+if (!document.getElementById('labelLineCanvas')) {
+  const c = document.createElement('canvas');
+  c.id = 'labelLineCanvas';
+  c.style.position = 'absolute';
+  c.style.left = '0';
+  c.style.top = '0';
+  c.style.pointerEvents = 'none';
+  c.style.zIndex = 1;
+  document.getElementById('solar-container').appendChild(c);
+}
+function drawLabelLine(idx, meshPos, labelWorld, labelX, labelY) {
+  const c = document.getElementById('labelLineCanvas');
+  c.width = renderer.domElement.width; c.height = renderer.domElement.height;
+  const ctx = c.getContext('2d');
+  if (idx === 0) ctx.clearRect(0, 0, c.width, c.height); // 只在第一个标签时清空
+  // 行星中心屏幕坐标
+  const v = meshPos.clone().project(camera);
+  const px = (v.x * 0.5 + 0.5) * c.width;
+  const py = ( -v.y * 0.5 + 0.5) * c.height;
+  // 标签底部坐标
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(labelX, labelY);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  drawStars();
+}
+// 点击弹窗
+function onPointerDown(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  const mouse = new THREE.Vector2(x, y);
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(planets.map(p=>p.mesh));
+  if (intersects.length > 0) {
+    const idx = intersects[0].object.userData.idx;
+    showPlanetPopup(idx);
+  }
+}
+function showPlanetPopup(idx) {
+  const p = planetData[idx];
+  const popup = document.getElementById('planetPopup');
+  popup.innerHTML = `<h2>${p.name} (${p.en})</h2><div>${p.intro}</div><div style='color:#aaa;font-size:14px;margin-top:8px;'>${planetIntroEn[p.name]}</div><button onclick='this.parentNode.style.display="none"'>关闭</button>`;
+  popup.style.display = 'block';
+}
+init();
+animate();
+// 视角切换逻辑
+function setCameraView(type) {
+  let targetPos, targetLook;
+  if (type === 'top') {
+    targetPos = {x:0, y:90, z:0};
+    targetLook = {x:0, y:0, z:0};
+  } else if (type === 'side') {
+    targetPos = {x:90, y:20, z:0};
+    targetLook = {x:0, y:0, z:0};
+  } else if (type === 'earth') {
+    // 地球视角：相机到地球上方，朝向太阳
+    const earth = planets && planets[2] && planets[2].mesh;
+    if (earth) {
+      const pos = earth.position.clone();
+      targetPos = {x:pos.x, y:pos.y+4, z:pos.z+6};
+      targetLook = {x:0, y:0, z:0};
+    } else {
+      targetPos = {x:0, y:10, z:30};
+      targetLook = {x:0, y:0, z:0};
+    }
+  } else if (type === 'sun') {
+    // 太阳视角：相机到太阳上方，朝向地球
+    const earth = planets && planets[2] && planets[2].mesh;
+    targetPos = {x:0, y:6, z:0};
+    targetLook = earth ? {x:earth.position.x, y:earth.position.y, z:earth.position.z} : {x:20, y:0, z:0};
+  }
+  if (targetPos && targetLook) {
+    smoothCameraMove(targetPos, targetLook, 900);
+  }
+}
+function smoothCameraMove(targetPos, targetLook, duration=800) {
+  const startPos = camera.position.clone();
+  const startLook = controls.target.clone();
+  const endPos = new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z);
+  const endLook = new THREE.Vector3(targetLook.x, targetLook.y, targetLook.z);
+  let t = 0, start = null;
+  function animateMove(ts) {
+    if (!start) start = ts;
+    t = Math.min(1, (ts-start)/duration);
+    camera.position.lerpVectors(startPos, endPos, t);
+    controls.target.lerpVectors(startLook, endLook, t);
+    controls.update();
+    if (t < 1) requestAnimationFrame(animateMove);
+  }
+  requestAnimationFrame(animateMove);
+}
+document.querySelectorAll('.view-btn').forEach(btn => {
+  btn.onclick = function() {
+    setCameraView(this.dataset.view);
+  }
+});
+    </script>
+<br>
+<br>
+</body>
+</html>

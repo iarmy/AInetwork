@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>空中画函数 · 手势演示</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: rgba(17, 22, 30, 0.82);
+    --line: rgba(255, 255, 255, 0.08);
+    --text: #e8edf4;
+    --dim: #8b97a5;
+    --accent: #4dd0e1;
+    --accent2: #ffb74d;
+    --danger: #ff7a6e;
+    --good: #69f0ae;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app { position: relative; width: 100vw; height: 100vh; }
+
+  /* 主画布舞台 */
+  #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas {
+    display: block;
+    max-width: 100vw; max-height: 100vh;
+    object-fit: contain;
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px var(--line), 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  /* 顶部：阶段标题 */
+  #stageBar {
+    position: absolute; top: 22px; left: 28px; right: 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    pointer-events: none;
+  }
+  #stageName {
+    font-size: 22px; font-weight: 600; letter-spacing: 1px;
+    color: var(--text);
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 18px; border-radius: 999px;
+  }
+  #gestureChip {
+    font-size: 15px; color: var(--dim);
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 6px 14px; border-radius: 999px;
+  }
+  #gestureChip b { color: var(--accent); font-weight: 600; }
+
+  /* 底部：提示语 */
+  #hintBar {
+    position: absolute; bottom: 26px; left: 28px; right: 28px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 16px;
+  }
+  #hint {
+    flex: 1; font-size: 26px; line-height: 1.45; color: var(--text);
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 14px 22px; border-radius: 14px;
+    backdrop-filter: blur(6px);
+  }
+  #hint .g { color: var(--accent2); font-weight: 600; }
+  #btnRow { display: flex; gap: 10px; }
+  .btn {
+    pointer-events: auto; cursor: pointer;
+    font-size: 15px; color: var(--text);
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 10px 16px; border-radius: 12px; white-space: nowrap;
+    transition: background .15s;
+  }
+  .btn:hover { background: rgba(255,255,255,0.1); }
+
+  /* 结果面板 */
+  #resultPanel {
+    position: absolute; top: 84px; right: 28px; width: 400px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 20px 22px;
+    backdrop-filter: blur(8px);
+    display: none; flex-direction: column; gap: 12px;
+  }
+  #resultPanel.show { display: flex; }
+  #resultEq {
+    font-size: 34px; font-weight: 700; color: var(--accent);
+    letter-spacing: 1px; word-break: break-all;
+  }
+  #resultMeta { font-size: 15px; color: var(--dim); }
+  #resultNote {
+    font-size: 17px; line-height: 1.5; color: var(--text);
+    border-top: 1px solid var(--line); padding-top: 12px;
+  }
+  #resultNote.warn { color: var(--danger); }
+  #resultNote.ok { color: var(--good); }
+
+  /* 揭题 / 全屏覆盖层 */
+  #reveal {
+    position: absolute; inset: 0;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center; gap: 26px;
+    background: radial-gradient(1200px 700px at 50% 42%, #16202e 0%, #0b0f14 65%);
+    text-align: center; padding: 40px;
+  }
+  #reveal.show { display: flex; }
+  #revealTitle {
+    font-size: clamp(40px, 7vw, 84px);
+    font-weight: 800; letter-spacing: 3px; line-height: 1.3;
+    color: #fff; text-shadow: 0 4px 30px rgba(77,208,225,0.35);
+    animation: rise .9s cubic-bezier(.16,1,.3,1) both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 启动 / 加载 / 错误覆盖层 */
+  .overlay {
+    position: absolute; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; gap: 20px;
+    align-items: center; justify-content: center; text-align: center;
+    background: var(--bg); padding: 40px;
+  }
+  .overlay.hidden { display: none; }
+  #startBtn {
+    font-size: 22px; font-weight: 600; color: #081018;
+    background: linear-gradient(180deg, #6be3f2, #33c6d8);
+    border: none; border-radius: 999px; padding: 16px 44px; cursor: pointer;
+    box-shadow: 0 8px 30px rgba(77,208,225,0.4);
+  }
+  #startBtn:hover { filter: brightness(1.06); }
+  .overlay h1 { font-size: 30px; margin: 0; }
+  .overlay p { font-size: 17px; color: var(--dim); max-width: 640px; line-height: 1.6; }
+  .spin {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.15); border-top-color: var(--accent);
+    animation: rot 0.8s linear infinite;
+  }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  #errText { color: var(--danger); font-size: 17px; max-width: 680px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage"><canvas id="cv"></canvas></div>
+
+  <div id="stageBar">
+    <div id="stageName">准备中…</div>
+    <div id="gestureChip">手势：<b>—</b></div>
+  </div>
+
+  <div id="resultPanel">
+    <div id="resultEq"></div>
+    <div id="resultMeta"></div>
+    <div id="resultNote"></div>
+  </div>
+
+  <div id="hintBar">
+    <div id="hint"></div>
+    <div id="btnRow">
+      <div class="btn" id="nextBtn">下一步 ›</div>
+      <div class="btn" id="resetBtn">重来 ↺</div>
+    </div>
+  </div>
+
+  <div id="reveal">
+    <div id="revealTitle"></div>
+  </div>
+
+  <div class="overlay" id="startOverlay">
+    <h1>空中画函数 · 手势演示</h1>
+    <p>开场：左手控制【AI】圆、右手控制【数学】圆，推到中间相遇；<br>再隔空画函数曲线、看 AI 露怯——最后双手对碰揭题。</p>
+    <button id="startBtn">允许摄像头并开始</button>
+  </div>
+
+  <div class="overlay hidden" id="loadOverlay">
+    <div class="spin"></div>
+    <p>正在加载摄像头与手势识别模型…</p>
+  </div>
+
+  <div class="overlay hidden" id="errOverlay">
+    <h1>启动失败</h1>
+    <p id="errText"></p>
+    <button class="btn" id="retryBtn" style="font-size:18px;padding:12px 28px;">重试</button>
+  </div>
+</div>
+
+<script type="module">
+import { FilesetResolver, HandLandmarker } from './lib/vision_bundle.js';
+/* =========================================================
+ * 空中画函数 · 手势演示（网页版）
+ * 报告：《人工智能赋能数学教育教学的实践路径》
+ * 用法：浏览器打开，允许摄像头，按屏幕提示用手势操作。
+ * 手势：五指张开＝开始/继续；只伸食指＝画线；握拳＝画完确认；双手对碰＝揭题。
+ * 注意：每次确认后需先“松开”该手势，才能做下一个手势，防止误跳过。
+ * 结尾：揭题后定格在报告题目页；如需重来请按 R 键或刷新页面。
+ * 开场：左手控制【AI】圆、右手控制【数学】圆，推到中间相遇后消失。
+ * 备用：屏幕右下角“下一步/重来”按钮，或键盘 空格/→＝下一步，R＝重来。
+ * ========================================================= */
+
+/* ---------- 可改配置 ---------- */
+const CONFIG = {
+  REPORT_TITLE: '人工智能赋能数学教育教学的实践路径',
+  MODEL_URL: './model/hand_landmarker.task',
+  WASM_URL: './lib/wasm',
+  STABLE_FRAMES: 10,      // 手势需稳定多少帧才触发
+  STAGE_COOLDOWN: 800,    // 进入新阶段后忽略手势的毫秒数（避免上一手势误触发）
+  R2_THRESHOLD: 0.72,     // 拟合 R² 低于此值判为“无法识别”
+  BACKTRACK_RATIO: 0.15,  // 回退占比超过此值判为“不满足函数定义”
+  MERGE_RADIUS: 0.15,     // 两圆距屏幕中心 < 该比例·宽度 即触发融合消失
+  MERGE_DURATION: 900,    // 融合动画时长（毫秒）
+  CLAP_DISTANCE: 0.18,    // 双手掌心距 < 该比例·宽度 即触发“对碰揭题”
+  CIRCLE_RADIUS: 0.085,   // 圆的半径（占画面宽度的比例）
+  CIRCLE_LEFT:  { label: 'AI',   color: '#4dd0e1', home: 0.22 },
+  CIRCLE_RIGHT: { label: '数学', color: '#ffb74d', home: 0.78 },
+};
+
+/* ---------- 手势定义 ---------- */
+// MediaPipe 手部关键点索引
+const WRIST = 0;
+const FINGERS = [            // [mcp, pip, tip] 食指/中指/无名指/小指
+  [5, 6, 8],
+  [9, 10, 12],
+  [13, 14, 16],
+  [17, 18, 20],
+];
+const CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17],
+];
+
+const STAGES = {
+  TWIN:   { name: '开场 · AI 遇见数学', hint: '伸出<span class="g">双手</span>：左手控制<span class="g">【AI】</span>圆，右手控制<span class="g">【数学】</span>圆，把它们一起推到<span class="g">中间相遇</span>' },
+  TRACK:  { name: '第一步 · 亮出双手',   hint: '请把<span class="g">掌心对准镜头</span>，五指张开 —— AI 正在“看”你的手' },
+  DRAW:   { name: '第二步 · 空中画曲线', hint: '只伸<span class="g">食指</span>，从左到右隔空画一条<span class="g">抛物线</span>；画完<span class="g">握拳</span>确认' },
+  FIT:    { name: '第三步 · AI 拟合',    hint: 'AI 已“看懂”这条曲线。请先<span class="g">松开</span>拳头，再<span class="g">五指张开</span>进入下一步' },
+  DRAW2:  { name: '第四步 · 画几何图形', hint: '再伸<span class="g">食指</span>，画一个<span class="g">三角形或圆</span>；画完<span class="g">握拳</span>确认' },
+  FAIL:   { name: '第五步 · AI 露怯',    hint: '看 AI 如何“一本正经”地出错。最后：伸出<span class="g">双手对碰</span>揭题' },
+  REVEAL: { name: '',                   hint: '' },
+};
+const FLOW = ['TWIN', 'TRACK', 'DRAW', 'FIT', 'DRAW2', 'FAIL', 'REVEAL'];
+
+/* ---------- DOM ---------- */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const video = document.createElement('video');
+video.setAttribute('playsinline', '');
+video.muted = true;
+
+const $stageName = document.getElementById('stageName');
+const $gestureChip = document.getElementById('gestureChip');
+const $hint = document.getElementById('hint');
+const $resultPanel = document.getElementById('resultPanel');
+const $resultEq = document.getElementById('resultEq');
+const $resultMeta = document.getElementById('resultMeta');
+const $resultNote = document.getElementById('resultNote');
+const $reveal = document.getElementById('reveal');
+const $revealTitle = document.getElementById('revealTitle');
+
+/* ---------- 状态 ---------- */
+const state = {
+  stage: 'TWIN',
+  points: [],            // 当前轨迹点（屏幕坐标）
+  fit: null,             // {degree, coeffs, r2, eq, transform, backtrack}
+  indexExtended: false,
+  gestureLabel: 'other',
+  curledFrames: 0, fistArmed: true,
+  openFrames: 0,  openArmed: true,
+  hasHand: false,
+  circles: null,         // TWIN 阶段：{left:{x,y}, right:{x,y}}
+  merge: null,           // 融合动画：{start, fromL, fromR}
+  stageEnteredAt: 0,     // 进入当前阶段的时间戳
+  clapFrames: 0,         // 双手对碰连续帧计数
+};
+
+/* ---------- 工具 ---------- */
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const round2 = v => Math.round(v * 100) / 100;
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* 手掌中心（屏幕坐标，已镜像）：取腕部 + 四指掌骨关节的均值 */
+function handCenter(lm) {
+  const idxs = [0, 5, 9, 13, 17];
+  let x = 0, y = 0;
+  for (const i of idxs) { x += (1 - lm[i].x) * cv.width; y += lm[i].y * cv.height; }
+  return { x: x / idxs.length, y: y / idxs.length };
+}
+
+function fingerExtended(lm, tip, pip) {
+  return dist(lm[tip], lm[WRIST]) > dist(lm[pip], lm[WRIST]) * 1.08;
+}
+
+function superscript(d) { return d === 2 ? '²' : d === 3 ? '³' : '^' + d; }
+
+function formatEq(coeffs, degree) {
+  const parts = [];
+  for (let d = degree; d >= 0; d--) {
+    const c = coeffs[d];
+    if (Math.abs(c) < 1e-6) continue;
+    const sign = c < 0 ? '− ' : (parts.length ? '+ ' : '');
+    const mag = Math.abs(round2(c));
+    let term;
+    if (d === 0) term = mag;
+    else if (d === 1) term = (mag === 1 ? '' : mag) + 'x';
+    else term = (mag === 1 ? '' : mag) + 'x' + superscript(d);
+    parts.push(sign + term);
+  }
+  return 'y = ' + (parts.join(' ') || '0');
+}
+
+/* 最小二乘多项式拟合（高斯消元求解正规方程） */
+function polyfit(xs, ys, degree) {
+  const n = xs.length, m = degree + 1;
+  const ATA = Array.from({ length: m }, () => new Array(m).fill(0));
+  const ATb = new Array(m).fill(0);
+  for (let i = 0; i < n; i++) {
+    let p = 1;
+    for (let j = 0; j < m; j++) {
+      let q = 1;
+      for (let k = 0; k < m; k++) { ATA[j][k] += p * q; q *= xs[i]; }
+      ATb[j] += p * ys[i];
+      p *= xs[i];
+    }
+  }
+  return solve(ATA, ATb);
+}
+function solve(A, b) {
+  const n = b.length;
+  const M = A.map((row, i) => row.concat(b[i]));
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    [M[col], M[piv]] = [M[piv], M[col]];
+    const d = M[col][col] || 1e-12;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = M[r][col] / d;
+      for (let c = col; c <= n; c++) M[r][c] -= f * M[col][c];
+    }
+  }
+  return M.map((row, i) => row[n] / (row[i] || 1e-12));
+}
+function evalPoly(coeffs, x) {
+  let y = 0, p = 1;
+  for (let i = 0; i < coeffs.length; i++) { y += coeffs[i] * p; p *= x; }
+  return y;
+}
+function r2(xs, ys, coeffs) {
+  const mean = ys.reduce((a, b) => a + b, 0) / ys.length;
+  let ssRes = 0, ssTot = 0;
+  for (let i = 0; i < xs.length; i++) {
+    ssRes += (ys[i] - evalPoly(coeffs, xs[i])) ** 2;
+    ssTot += (ys[i] - mean) ** 2;
+  }
+  return ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+}
+function smooth(pts, win = 3) {
+  if (pts.length < 3) return pts;
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const s = Math.max(0, i - win), e = Math.min(pts.length - 1, i + win);
+    let sx = 0, sy = 0, c = 0;
+    for (let j = s; j <= e; j++) { sx += pts[j].x; sy += pts[j].y; c++; }
+    out.push({ x: sx / c, y: sy / c });
+  }
+  return out;
+}
+
+/* 分析轨迹：拟合 + 是否满足函数定义（竖直检验） */
+function analyzeCurve(rawPoints) {
+  const pts = smooth(rawPoints);
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  if (maxX - minX < 10 || maxY - minY < 10) return { error: '画得太小，请重画' };
+
+  const xn = xs.map(x => (x - minX) / (maxX - minX) * 4 - 2);
+  const yn = ys.map(y => -((y - minY) / (maxY - minY) * 4 - 2));
+
+  let best = null;
+  for (let d = 1; d <= 3; d++) {
+    const c = polyfit(xn, yn, d);
+    const r = r2(xn, yn, c);
+    if (!best || r > best.r2) best = { degree: d, coeffs: c, r2: r };
+  }
+  // 回退占比：负向位移之和 / 总位移之和
+  let neg = 0, tot = 0;
+  for (let i = 1; i < xs.length; i++) {
+    const d = xs[i] - xs[i - 1];
+    tot += Math.abs(d);
+    if (d < 0) neg += -d;
+  }
+  const backtrack = tot > 0 ? neg / tot : 0;
+
+  return {
+    error: null,
+    degree: best.degree, coeffs: best.coeffs, r2: best.r2,
+    eq: formatEq(best.coeffs, best.degree),
+    transform: { minX, maxX, minY, maxY },
+    backtrack,
+    isFunction: backtrack < CONFIG.BACKTRACK_RATIO,
+    r2Ok: best.r2 >= CONFIG.R2_THRESHOLD,
+  };
+}
+
+/* ---------- 阶段推进 ---------- */
+function initCircles() {
+  state.circles = {
+    left:  { x: cv.width * CONFIG.CIRCLE_LEFT.home,  y: cv.height * 0.5 },
+    right: { x: cv.width * CONFIG.CIRCLE_RIGHT.home, y: cv.height * 0.5 },
+  };
+  state.merge = null;
+}
+
+function setStage(key) {
+  state.stage = key;
+  state.stageEnteredAt = performance.now();
+  state.curledFrames = 0; state.openFrames = 0; state.clapFrames = 0;
+  // 关键：进入新阶段时触发锁一律关闭，必须先“松开”上一手势，锁才会重新打开，
+  // 从而避免“确认时握着的拳头”在新阶段又被当成一次新触发（导致第 3/4 步被跳过）。
+  state.fistArmed = false; state.openArmed = false;
+  const s = STAGES[key];
+  $stageName.textContent = s.name;
+  $hint.innerHTML = s.hint;
+  // 进入需要"重新画"的阶段时清空轨迹与拟合；FIT/FAIL 阶段保留刚算出的结果
+  if (key === 'TWIN' || key === 'TRACK' || key === 'DRAW' || key === 'DRAW2') {
+    state.points = [];
+    state.fit = null;
+  }
+  if (key === 'TWIN') initCircles();
+  else state.merge = null;
+  if (key !== 'FIT' && key !== 'FAIL') {
+    $resultPanel.classList.remove('show');
+  }
+  $reveal.classList.remove('show');
+  if (key === 'REVEAL') {
+    $revealTitle.textContent = CONFIG.REPORT_TITLE;
+    $reveal.classList.add('show');
+    $hint.innerHTML = '报告题目已经揭晓 —— 感谢各位老师！';
+  }
+}
+function advance() {
+  const i = FLOW.indexOf(state.stage);
+  if (i >= 0 && i < FLOW.length - 1) setStage(FLOW[i + 1]);
+}
+function reset() { setStage('TWIN'); }
+
+function showResultPanel(eq, meta, note, warn) {
+  $resultEq.textContent = eq;
+  $resultMeta.textContent = meta;
+  $resultNote.textContent = note;
+  $resultNote.className = warn ? 'warn' : 'ok';
+  $resultPanel.classList.add('show');
+}
+
+function finalizeDraw(stageKey) {
+  if (state.points.length < 8) return;   // 点数太少：不计算，交由 advance() 推进
+  const a = analyzeCurve(state.points);
+  state.fit = a;
+  if (stageKey === 'FIT') {
+    if (a.error || !a.r2Ok) {
+      showResultPanel('无法识别', '拟合优度 R² 过低', '请回到上一步重画，或直接点“下一步”继续。', true);
+    } else {
+      const kind = a.degree === 1 ? '一次函数（直线）' : a.degree === 2 ? '二次函数（抛物线）' : '三次函数';
+      const explain = {
+        1: '图像单调变化，是一条直线。',
+        2: '开口方向由二次项系数决定。',
+        3: '图像呈现一个拐点（S 形）。',
+      }[a.degree] || '';
+      showResultPanel(a.eq, `识别为${kind} · R²=${round2(a.r2)}`, '（讲解文字：此处可接入 DeepSeek 实时生成）' + explain, false);
+    }
+  } else if (stageKey === 'FAIL') {
+    if (a.error) { showResultPanel('（无数据）', '', '没有识别到轨迹，请重画。', true); return; }
+    const meta = a.isFunction
+      ? `R²=${round2(a.r2)}（拟合质量差）`
+      : '⚠ 该图形不满足函数定义：一个 x 对应多个 y';
+    showResultPanel(
+      a.eq,
+      meta + ' · 置信度 91%',
+      a.isFunction
+        ? 'AI 把随手画的图形强行拟合成一条曲线，还报出“高置信度”——它并没有真正“理解”图形。'
+        : 'AI 没有识别出“这不是函数图像”，仍然强行拟合并报出高置信度——这就是“概率拟合”而非“理解”。',
+      true
+    );
+  }
+}
+
+/* ---------- 手势分类与触发（支持双手，取“任一”满足的手） ---------- */
+function processHands(hands) {
+  let indexTip = null, indexExtended = false, allCurled = false, allExtended = false;
+  for (const lm of hands) {
+    const ext = FINGERS.map(f => fingerExtended(lm, f[2], f[1]));
+    if (ext[0] && !indexTip) { indexExtended = true; indexTip = lm[8]; }
+    if (ext.every(v => !v)) allCurled = true;
+    if (ext.every(v => v)) allExtended = true;
+  }
+
+  const label = allExtended ? '五指张开' : allCurled ? '握拳' : indexExtended ? '食指' : '—';
+  state.indexExtended = indexExtended;
+  state.gestureLabel = label;
+
+  // 计数器 + 触发锁
+  state.curledFrames = allCurled ? state.curledFrames + 1 : 0;
+  state.openFrames = allExtended ? state.openFrames + 1 : 0;
+  if (!allCurled && state.curledFrames === 0) state.fistArmed = true;
+  if (!allExtended && state.openFrames === 0) state.openArmed = true;
+  const cooldown = (performance.now() - state.stageEnteredAt) < CONFIG.STAGE_COOLDOWN;
+  const fistReady = !cooldown && state.curledFrames >= CONFIG.STABLE_FRAMES && state.fistArmed;
+  const openReady = !cooldown && state.openFrames >= CONFIG.STABLE_FRAMES && state.openArmed;
+
+  const s = state.stage;
+  if (s === 'TRACK') {
+    if (openReady) { state.openArmed = false; advance(); }
+  } else if (s === 'DRAW') {
+    if (indexExtended && indexTip) recordPoint(indexTip);
+    if (fistReady) { state.fistArmed = false; finalizeDraw('FIT'); advance(); }
+  } else if (s === 'FIT') {
+    if (openReady) { state.openArmed = false; advance(); }
+  } else if (s === 'DRAW2') {
+    if (indexExtended && indexTip) recordPoint(indexTip);
+    if (fistReady) { state.fistArmed = false; finalizeDraw('FAIL'); advance(); }
+  }
+  // REVEAL 阶段：定格在报告题目页，任何手势都不返回（只能按 R 键或刷新重来）
+}
+
+function recordPoint(tip) {
+  const px = (1 - tip.x) * cv.width;   // 镜像后的屏幕坐标
+  const py = tip.y * cv.height;
+  const last = state.points[state.points.length - 1];
+  if (!last || Math.hypot(px - last.x, py - last.y) > 3) state.points.push({ x: px, y: py });
+}
+
+/* ---------- 渲染 ---------- */
+function drawSkeleton(lm, color = 'rgba(77,208,225,0.9)') {
+  const pts = lm.map(p => ({ x: (1 - p.x) * cv.width, y: p.y * cv.height }));
+  ctx.lineWidth = 2; ctx.strokeStyle = color;
+  ctx.beginPath();
+  for (const [a, b] of CONNECTIONS) { ctx.moveTo(pts[a].x, pts[a].y); ctx.lineTo(pts[b].x, pts[b].y); }
+  ctx.stroke();
+  for (const p of pts) { ctx.fillStyle = '#e8edf4'; ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); }
+  // 指尖高亮
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(pts[8].x, pts[8].y, 7, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawTrajectory() {
+  if (state.points.length < 2) return;
+  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,183,77,0.95)'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(state.points[0].x, state.points[0].y);
+  for (let i = 1; i < state.points.length; i++) ctx.lineTo(state.points[i].x, state.points[i].y);
+  ctx.stroke();
+}
+
+function drawFittedCurve() {
+  const f = state.fit;
+  if (!f || !f.coeffs) return;
+  const t = f.transform;
+  ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.strokeStyle = '#69f0ae';
+  ctx.beginPath();
+  for (let i = 0; i <= 100; i++) {
+    const xn = -2 + (4 * i) / 100;
+    const yn = evalPoly(f.coeffs, xn);
+    const px = (xn + 2) / 4 * (t.maxX - t.minX) + t.minX;
+    const py = t.minY + (2 - yn) / 4 * (t.maxY - t.minY);
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+/* ---------- TWIN 开场场景：AI 圆 ✕ 数学圆 ---------- */
+function drawCircle(x, y, r, color, label, alpha = 1) {
+  if (r <= 0 || alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 34;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#081018';
+  ctx.font = 'bold ' + Math.round(r * 0.6) + 'px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x, y + 1);
+  ctx.restore();
+}
+
+function drawCenterTarget() {
+  const cx = cv.width / 2, cy = cv.height / 2;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([7, 9]);
+  ctx.beginPath(); ctx.arc(cx, cy, CONFIG.MERGE_RADIUS * cv.width, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(cx - 16, cy); ctx.lineTo(cx + 16, cy);
+  ctx.moveTo(cx, cy - 16); ctx.lineTo(cx, cy + 16);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function updateCircles(hands) {
+  const c = state.circles;
+  const centers = hands.map(handCenter).sort((a, b) => a.x - b.x);
+  let tL = c.left, tR = c.right;
+  if (centers.length === 1) {
+    const p = centers[0];
+    if (Math.hypot(p.x - c.left.x, p.y - c.left.y) <= Math.hypot(p.x - c.right.x, p.y - c.right.y)) tL = p; else tR = p;
+  } else if (centers.length >= 2) {
+    tL = centers[0]; tR = centers[1];
+  }
+  c.left.x = lerp(c.left.x, tL.x, 0.3);
+  c.left.y = lerp(c.left.y, tL.y, 0.3);
+  c.right.x = lerp(c.right.x, tR.x, 0.3);
+  c.right.y = lerp(c.right.y, tR.y, 0.3);
+
+  if (!state.merge && centers.length >= 2) {
+    const cx = cv.width / 2, cy = cv.height / 2, r = CONFIG.MERGE_RADIUS * cv.width;
+    if (Math.hypot(c.left.x - cx, c.left.y - cy) < r && Math.hypot(c.right.x - cx, c.right.y - cy) < r) {
+      state.merge = { start: performance.now(), fromL: { ...c.left }, fromR: { ...c.right } };
+    }
+  }
+}
+
+function drawCircles() {
+  const c = state.circles, cx = cv.width / 2, cy = cv.height / 2;
+  let lx = c.left.x, ly = c.left.y, rx = c.right.x, ry = c.right.y;
+  let rad = CONFIG.CIRCLE_RADIUS * cv.width, alpha = 1;
+  if (state.merge) {
+    const t = Math.min(1, (performance.now() - state.merge.start) / CONFIG.MERGE_DURATION);
+    lx = lerp(state.merge.fromL.x, cx, t); ly = lerp(state.merge.fromL.y, cy, t);
+    rx = lerp(state.merge.fromR.x, cx, t); ry = lerp(state.merge.fromR.y, cy, t);
+    rad = CONFIG.CIRCLE_RADIUS * cv.width * (1 - t);
+    alpha = 1 - t;
+    if (t >= 1) { state.merge = null; advance(); return; }
+  }
+  drawCircle(lx, ly, rad, CONFIG.CIRCLE_LEFT.color, CONFIG.CIRCLE_LEFT.label, alpha);
+  drawCircle(rx, ry, rad, CONFIG.CIRCLE_RIGHT.color, CONFIG.CIRCLE_RIGHT.label, alpha);
+}
+
+function renderTwin(hands) {
+  ctx.fillStyle = 'rgba(5,8,13,0.60)';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  drawCenterTarget();
+  // 按屏幕左右给手着色：左侧手→【AI】青色，右侧手→【数学】橙色
+  const sorted = hands.map(lm => ({ lm, c: handCenter(lm) })).sort((a, b) => a.c.x - b.c.x);
+  for (let i = 0; i < sorted.length; i++) {
+    const color = (sorted.length >= 2)
+      ? (i === 0 ? CONFIG.CIRCLE_LEFT.color : CONFIG.CIRCLE_RIGHT.color)
+      : CONFIG.CIRCLE_LEFT.color;
+    drawSkeleton(sorted[i].lm, color);
+  }
+  updateCircles(hands);
+  drawCircles();
+  $gestureChip.innerHTML = '手势：<b>双手</b>' + (hands.length ? '' : '　(请伸出双手)');
+}
+
+/* ---------- 双手对碰（揭题触发） ---------- */
+function checkClap(hands) {
+  if (hands.length < 2) { state.clapFrames = 0; return false; }
+  const c1 = handCenter(hands[0]), c2 = handCenter(hands[1]);
+  const d = Math.hypot(c1.x - c2.x, c1.y - c2.y);
+  if (d < CONFIG.CLAP_DISTANCE * cv.width) {
+    state.clapFrames++;
+    const cooldown = (performance.now() - state.stageEnteredAt) < CONFIG.STAGE_COOLDOWN;
+    return !cooldown && state.clapFrames >= CONFIG.STABLE_FRAMES;
+  }
+  state.clapFrames = 0;
+  return false;
+}
+
+function drawClapIndicator(hands) {
+  if (hands.length < 2) return;
+  const c1 = handCenter(hands[0]), c2 = handCenter(hands[1]);
+  const d = Math.hypot(c1.x - c2.x, c1.y - c2.y);
+  const close = d < CONFIG.CLAP_DISTANCE * cv.width;
+  const color = close ? '#69f0ae' : '#ff7a6e';
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath(); ctx.moveTo(c1.x, c1.y); ctx.lineTo(c2.x, c2.y); ctx.stroke();
+  ctx.setLineDash([]);
+  const mx = (c1.x + c2.x) / 2, my = (c1.y + c2.y) / 2;
+  ctx.fillStyle = color;
+  ctx.font = 'bold 22px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(close ? '✓ 对碰' : '再靠近', mx, my - 14);
+  ctx.restore();
+}
+
+function render(result) {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  // 镜像绘制视频
+  ctx.save(); ctx.translate(cv.width, 0); ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, cv.width, cv.height);
+  ctx.restore();
+
+  const hands = (result && result.landmarks) ? result.landmarks : [];
+  state.hasHand = hands.length > 0;
+
+  if (state.stage === 'TWIN') { renderTwin(hands); return; }
+
+  drawTrajectory();
+  drawFittedCurve();
+  for (const lm of hands) drawSkeleton(lm);
+
+  if (state.stage === 'FAIL') {
+    drawClapIndicator(hands);
+    if (checkClap(hands)) advance();
+    $gestureChip.innerHTML = '手势：<b>双手对碰</b>' + (hands.length >= 2 ? '' : '　(请伸出双手)');
+  } else {
+    if (hands.length) {
+      processHands(hands);
+    } else {
+      state.gestureLabel = '—';
+      state.indexExtended = false;
+      // 无手 = 所有手势已松开，重新武装触发锁（防止“松手发生在出框期间”导致锁永不打开）
+      state.curledFrames = 0; state.openFrames = 0; state.clapFrames = 0;
+      state.fistArmed = true; state.openArmed = true;
+    }
+    $gestureChip.innerHTML = '手势：<b>' + state.gestureLabel + '</b>' + (state.hasHand ? '' : '　(未检测到手)');
+  }
+}
+
+/* ---------- 主循环 ---------- */
+let handLandmarker = null;
+function loop() {
+  if (video.readyState >= 2 && handLandmarker) {
+    let result = null;
+    try { result = handLandmarker.detectForVideo(video, performance.now()); } catch (e) {}
+    render(result);
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ---------- 初始化 ---------- */
+async function initCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: 'user' } });
+  video.srcObject = stream;
+  await video.play();
+  await new Promise(r => { if (video.videoWidth) r(); else video.onloadedmetadata = r; });
+  cv.width = video.videoWidth;
+  cv.height = video.videoHeight;
+}
+async function initModel() {
+  const vision = await FilesetResolver.forVisionTasks(CONFIG.WASM_URL);
+  const base = { modelAssetPath: CONFIG.MODEL_URL };
+  const opts = delegate => ({
+    baseOptions: { ...base, delegate },
+    runningMode: 'VIDEO',
+    numHands: 2,
+    minHandDetectionConfidence: 0.5,
+    minHandPresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+  });
+  try {
+    handLandmarker = await HandLandmarker.createFromOptions(vision, opts('GPU'));
+  } catch (e) {
+    console.warn('GPU 加速不可用，回退到 CPU：', e);
+    handLandmarker = await HandLandmarker.createFromOptions(vision, opts('CPU'));
+  }
+}
+function showErr(msg) {
+  document.getElementById('loadOverlay').classList.add('hidden');
+  document.getElementById('errText').textContent = msg;
+  document.getElementById('errOverlay').classList.remove('hidden');
+}
+async function start() {
+  document.getElementById('startOverlay').classList.add('hidden');
+  document.getElementById('loadOverlay').classList.remove('hidden');
+  try {
+    await initCamera();
+    await initModel();
+    document.getElementById('loadOverlay').classList.add('hidden');
+    setStage('TWIN');
+    loop();
+  } catch (e) {
+    console.error(e);
+    showErr('请检查：① 是否允许了摄像头权限；② 是否通过 http://localhost 访问（不要直接双击文件打开）。\n' + (e && e.message ? e.message : e));
+  }
+}
+
+/* ---------- 事件 ---------- */
+document.getElementById('startBtn').addEventListener('click', start);
+document.getElementById('retryBtn').addEventListener('click', () => { location.reload(); });
+document.getElementById('nextBtn').addEventListener('click', advance);
+document.getElementById('resetBtn').addEventListener('click', reset);
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowRight') { e.preventDefault(); advance(); }
+  else if (e.code === 'KeyR') { reset(); }
+});
+</script>
+</body>
+</html>

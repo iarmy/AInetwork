@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>红军长征路线图演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+      
+        body {
+           font-family: "Microsoft YaHei", sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+       }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            background-color: #c41e3a;
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .content-wrapper {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+        
+        .left-column {
+            flex: 7;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .animation-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            flex: 7;
+        }
+        
+        #map-container {
+            width: 90%;
+            margin: 0 auto;
+            height: 600px;
+            height: 540px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        #map-canvas {
+            width: 100%;
+            height: 100%;
+            background-color: #f9f9f9;
+        }
+        
+        .controls {
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            flex: 3;
+        }
+        
+        .timeline-section {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .timeline {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .event {
+            margin-bottom: 15px;
+            padding-left: 20px;
+            border-left: 3px solid #c41e3a;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+        
+        .event.active {
+            opacity: 1;
+        }
+        
+        .event-date {
+            font-weight: bold;
+            color: #c41e3a;
+        }
+        
+        .event-description {
+            margin-top: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            background-color: #c41e3a;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #a01830;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #ddd;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .progress {
+            width: 0%;
+            height: 100%;
+            background-color: #c41e3a;
+            transition: width 0.3s;
+        }
+        
+        .statistics-section {
+            width: 90%;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 20px;
+            background-color: #fff3f3;
+            border-radius: 8px;
+        }
+        
+        .stat-item {
+            flex: 1 1 calc(50% - 10px);
+            padding: 15px;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s;
+        }
+        
+        .stat-item:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #c41e3a;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .stat-description {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 5px;
+            line-height: 1.4;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .event-detail {
+            margin-top: 8px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #666;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .event.active .event-detail {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .poetry-section {
+            width: 90%;
+            padding: 30px;
+            background: linear-gradient(135deg, #fff3f3 0%, #fff 100%);
+            border-radius: 8px;
+            border-left: 4px solid #c41e3a;
+        }
+        
+        .poetry-title {
+            font-size: 1.8rem;
+            color: #c41e3a;
+            margin-bottom: 15px;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .poetry-info {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .poetry-background {
+            font-size: 1.2rem;
+            color: #333;
+            line-height: 2;
+            text-align: center;
+            margin-bottom: 20px;
+            font-family: "楷体", KaiTi, serif;
+        }
+        
+        .poetry-note {
+            font-size: 0.95rem;
+            color: #666;
+            line-height: 1.8;
+            text-indent: 2em;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px dashed #ddd;
+        }
+        
+        .audio-controls {
+            margin: 15px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .audio-title {
+            font-weight: bold;
+            color: #c41e3a;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .volume-control {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+            gap: 10px;
+        }
+        
+        .volume-control label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .volume-control input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #ddd;
+            border-radius: 3px;
+            outline: none;
+        }
+        
+        .volume-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #c41e3a;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>红军长征路线图</h1>
+            <p class="subtitle">二万五千里的革命征程（1934-1936）</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="content-wrapper">
+                <div class="left-column">
+                    <div id="map-container">
+                        <canvas id="map-canvas"></canvas>
+                    </div>
+                    
+                    <div class="poetry-section">
+                        <div class="poetry-title">《七律·长征》</div>
+                        <div class="poetry-info">
+                            创作时间：1935年10月 | 作者：毛泽东
+                        </div>
+                        <div class="poetry-background">
+                            红军不怕远征难，<br>
+                            万水千山只等闲。<br>
+                            五岭逶迤腾细浪，<br>
+                            乌蒙磅礴走泥丸。<br>
+                            金沙水拍云崖暖，<br>
+                            大渡桥横铁索寒。<br>
+                            更喜岷山千里雪，<br>
+                            三军过后尽开颜。
+                        </div>
+                        <div class="poetry-note">
+                            注：这首诗作于1935年，是毛主席在长征途中创作的一首气势磅礴的七律诗。诗中描绘了红军战士不畏艰险、勇往直前的革命精神，展现了长征途中跨越万水千山的壮丽场景。诗中提到的五岭、乌蒙山、金沙江、大渡河、岷山等都是红军长征途中经过的重要地理位置，每一处都凝聚着红军将士的英勇事迹。
+                        </div>
+                    </div>
+                    
+                    <div class="statistics-section">
+                        <div class="stat-item">
+                            <div class="stat-value">25000</div>
+                            <div class="stat-label">里程（公里）</div>
+                            <div class="stat-description">相当于绕地球赤道两圈的距离</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">368</div>
+                            <div class="stat-label">天数</div>
+                            <div class="stat-description">历时一年零三天，跨越1934-1936年</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">18</div>
+                            <div class="stat-label">山脉</div>
+                            <div class="stat-description">包括峨眉山、岷山、夹金山、六盘山等</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">24</div>
+                            <div class="stat-label">大河</div>
+                            <div class="stat-description">跨越长江、大渡河、金沙江等重要水系</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <div class="button-group">
+                        <button id="start-btn">开始演示</button>
+                        <button id="reset-btn">重置</button>
+                        <button id="music-btn">播放音乐</button>
+                    </div>
+                    
+                    <div class="progress-bar">
+                        <div class="progress" id="progress"></div>
+                    </div>
+                    
+                    <div class="audio-controls">
+                        <div class="audio-title">背景音乐: 《红星照我去战斗》</div>
+                        <audio id="background-music" src="龚玥-红星照我去战斗.mp3" preload="auto" loop></audio>
+                        <div class="volume-control">
+                            <label for="volume">音量:</label>
+                            <input type="range" id="volume" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                    </div>
+                    
+                    <div class="timeline">
+                        <h3>重要事件</h3>
+                        <div class="timeline">
+                            <div class="event" data-date="1934-10">
+                                <div class="event-date">1934年10月</div>
+                                <div class="event-description">从江西瑞金出发</div>
+                                <div class="event-detail">
+                                    中央红军主力8.6万人，携带大量武器弹药，从中央苏区出发，开始战略转移。于都河边，数万红军战士和群众告别，场面震撼人心。
+                                </div>
+                            </div>
+                            <div class="event" data-date="1934-12">
+                                <div class="event-date">1934年12月</div>
+                                <div class="event-description">突破湘江</div>
+                                <div class="event-detail">
+                                    在湘江战役中，红军面对国民党军队的重重包围，以巨大牺牲突破封锁。这是长征途中最为惨烈的战役之一，红军主力减至3万余人。
+                                </div>
+                            </div>
+                            <div class="event" data-date="1935-01">
+                                <div class="event-date">1935年1月</div>
+                                <div class="event-description">遵义会议</div>
+                                <div class="event-detail">
+                                    在贵州遵义召开的政治局扩大会议，确立了毛泽东在党中央和红军的领导地位。这次会议是中国共产党历史上一个生死攸关的转折点。
+                                </div>
+                            </div>
+                            <div class="event" data-date="1935-03">
+                                <div class="event-date">1935年3月</div>
+                                <div class="event-description">四渡赤水</div>
+                                <div class="event-detail">
+                                    红军运用灵活机动的战术，四次渡过赤水河，巧妙摆脱敌人追击。这一战役充分展现了红军指挥员的军事指挥才能和战士们的英勇顽强。
+                                </div>
+                            </div>
+                            <div class="event" data-date="1935-05">
+                                <div class="event-date">1935年5月</div>
+                                <div class="event-description">强渡大渡河、飞夺泸定桥</div>
+                                <div class="event-detail">
+                                    面对湍急的大渡河，红军勇士们冒着枪林弹雨，仅用17名勇士就夺取了泸定桥。这座铁索桥成为红军长征途中最具传奇色彩的战斗象征。
+                                </div>
+                            </div>
+                            <div class="event" data-date="1935-06">
+                                <div class="event-date">1935年6月</div>
+                                <div class="event-description">翻越夹金山</div>
+                                <div class="event-detail">
+                                    红军翻越海拔4000多米的夹金山，战士们在冰天雪地中艰难前行。许多战士衣衫单薄，赤脚踩雪，展现了红军将士百折不挠的革命意志。
+                                </div>
+                            </div>
+                            <div class="event" data-date="1935-09">
+                                <div class="event-date">1935年9月</div>
+                                <div class="event-description">翻越六盘山</div>
+                                <div class="event-detail">
+                                    红军翻越六盘山时，毛泽东写下了著名的词作《清平乐·六盘山》："天高云淡，望断南飞雁。不到长城非好汉，屈指行程二万。"
+                                </div>
+                            </div>
+                            <div class="event" data-date="1935-10">
+                                <div class="event-date">1935年10月</div>
+                                <div class="event-description">到达陕北延安</div>
+                                <div class="event-detail">
+                                    历经368天，翻越18座大山，跨过24条大河，红军终于胜利到达陕北革命根据地。这次伟大的战略转移，为中国革命事业的发展开辟了新的局面。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>© 2025 红军长征路线图演示 | 致敬革命先烈</p>
+        </footer>
+    </div>
+    
+    <script>
+        // 获取DOM元素
+        const canvas = document.getElementById('map-canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const progressBar = document.getElementById('progress');
+        
+        // 获取音频相关元素
+        const musicBtn = document.getElementById('music-btn');
+        const backgroundMusic = document.getElementById('background-music');
+        const volumeControl = document.getElementById('volume');
+        
+        // 设置画布尺寸
+        function resizeCanvas() {
+            const container = document.getElementById('map-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+        
+        // 初始化时调整画布尺寸
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // 定义路线点，进一步拉长路线
+        const routePoints = [
+            { name: "瑞金", x: 0.90, y: 0.80, date: "1934-10" },
+            { name: "于都", x: 0.85, y: 0.75, date: "1934-10" },
+            { name: "南雄", x: 0.80, y: 0.70, date: "1934-11" },
+            { name: "通道", x: 0.70, y: 0.65, date: "1934-12" },
+            { name: "遵义", x: 0.60, y: 0.60, date: "1935-01" },
+            { name: "娄山关", x: 0.50, y: 0.50, date: "1935-02" },
+            { name: "四渡赤水", x: 0.40, y: 0.45, date: "1935-03" },
+            { name: "昭通", x: 0.30, y: 0.40, date: "1935-04" },
+            { name: "泸定桥", x: 0.20, y: 0.35, date: "1935-05" },
+            { name: "夹金山", x: 0.15, y: 0.30, date: "1935-06" },
+            { name: "延安", x: 0.10, y: 0.20, date: "1935-10" }
+        ];
+        
+        let currentPoint = -1;
+        let isAnimating = false;
+        let animationProgress = 0;
+        let startTime;
+        const animationDuration = 30000;
+        let isMusicPlaying = false;
+        
+        // 设置音频音量
+        backgroundMusic.volume = volumeControl.value;
+        
+        // 绘制地图背景
+        function drawBackground() {
+            ctx.fillStyle = '#f9f9f9';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // 修改路线绘制函数
+        function drawRoute(progress) {
+            // 先绘制路线
+            ctx.beginPath();
+            ctx.strokeStyle = '#c41e3a';
+            ctx.lineWidth = 4;
+            
+            // 计算当前应该显示到哪个点
+            const currentIndex = Math.floor(progress * (routePoints.length - 1));
+            const subProgress = (progress * (routePoints.length - 1)) % 1;
+            
+            // 绘制路线起点
+            const firstPoint = routePoints[0];
+            ctx.moveTo(firstPoint.x * canvas.width, firstPoint.y * canvas.height);
+            
+            // 绘制已经走过的完整路段
+            for (let i = 1; i <= currentIndex; i++) {
+                const point = routePoints[i];
+                ctx.lineTo(point.x * canvas.width, point.y * canvas.height);
+            }
+            
+            // 绘制当前正在走的路段
+            if (currentIndex < routePoints.length - 1) {
+                const start = routePoints[currentIndex];
+                const end = routePoints[currentIndex + 1];
+                
+                const startX = start.x * canvas.width;
+                const startY = start.y * canvas.height;
+                const endX = end.x * canvas.width;
+                const endY = end.y * canvas.height;
+                
+                const currentX = startX + (endX - startX) * subProgress;
+                const currentY = startY + (endY - startY) * subProgress;
+                
+                ctx.lineTo(currentX, currentY);
+            }
+            
+            // 立即绘制路线
+            ctx.stroke();
+            
+            // 只有当动画开始后（progress > 0）才绘制瑞金和延安气泡
+            if (progress > 0) {
+                // 绘制瑞金气泡
+                drawTimeBubble(
+                    routePoints[0].x * canvas.width,
+                    routePoints[0].y * canvas.height,
+                    routePoints[0].date
+                );
+                
+                // 只有当动画接近结束时才显示延安气泡
+                if (progress > 0.999) {
+                    drawTimeBubble(
+                        routePoints[routePoints.length - 1].x * canvas.width,
+                        routePoints[routePoints.length - 1].y * canvas.height,
+                        routePoints[routePoints.length - 1].date
+                    );
+                }
+            }
+            
+            // 在当前位置绘制移动的时间气泡（如果不是起点和终点）
+            if (currentIndex < routePoints.length - 1 && currentIndex > 0) {
+                const start = routePoints[currentIndex];
+                const end = routePoints[currentIndex + 1];
+                
+                const startX = start.x * canvas.width;
+                const startY = start.y * canvas.height;
+                const endX = end.x * canvas.width;
+                const endY = end.y * canvas.height;
+                
+                const currentX = startX + (endX - startX) * subProgress;
+                const currentY = startY + (endY - startY) * subProgress;
+                
+                // 计算当前日期
+                const startDate = new Date(start.date);
+                const endDate = new Date(end.date);
+                const dateDiff = endDate - startDate;
+                const currentDate = new Date(startDate.getTime() + dateDiff * subProgress);
+                
+                // 绘制移动的时间气泡
+                drawTimeBubble(currentX, currentY, currentDate);
+            }
+        }
+        
+        // 修改时间气泡绘制函数
+        function drawTimeBubble(x, y, date) {
+            const formattedDate = formatDate(date);
+            
+            // 设置文本样式
+            ctx.font = '14px Microsoft YaHei';
+            const textWidth = ctx.measureText(formattedDate).width;
+            const bubblePadding = 10;
+            const bubbleWidth = textWidth + bubblePadding * 2;
+            const bubbleHeight = 30;
+            
+            // 判断是否是起点或终点
+            const dateStr = date instanceof Date ? 
+                `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}` : 
+                date;
+            const isEndpoint = dateStr === routePoints[0].date || dateStr === routePoints[routePoints.length - 1].date;
+            
+            // 计算气泡位置 - 增加向上的距离
+            const bubbleX = x - bubbleWidth/2;
+            const bubbleY = y - bubbleHeight - 30; // 从 -10 改为 -30，使气泡显示更高
+            
+            // 绘制气泡背景
+            ctx.fillStyle = isEndpoint ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.9)';
+            ctx.strokeStyle = '#c41e3a';
+            ctx.lineWidth = isEndpoint ? 2.5 : 2;
+            
+            // 绘制气泡主体
+            ctx.beginPath();
+            ctx.roundRect(
+                bubbleX,
+                bubbleY,
+                bubbleWidth,
+                bubbleHeight,
+                5
+            );
+            ctx.fill();
+            ctx.stroke();
+            
+            // 绘制文本
+            ctx.fillStyle = '#c41e3a';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(formattedDate, x, bubbleY + bubbleHeight/2);
+        }
+        
+        // 修改地点标记绘制函数
+        function drawPoints(progress) {
+            const currentIndex = Math.floor(progress * (routePoints.length - 1));
+            
+            routePoints.forEach((point, index) => {
+                if (index > currentIndex) return;
+                
+                const x = point.x * canvas.width;
+                const y = point.y * canvas.height;
+                
+                // 绘制圆点
+                ctx.beginPath();
+                ctx.fillStyle = index === currentIndex ? '#ff0000' : '#c41e3a';
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 设置文本样式
+                ctx.font = 'bold 14px Microsoft YaHei';
+                ctx.textAlign = 'center';
+                const textWidth = ctx.measureText(point.name).width;
+                
+                // 根据点的位置决定文本显示在上方还是下方
+                let textX = x;
+                let textY;
+                
+                // 计算当前点与下一个点（如果存在）的斜率
+                let slope = 0;
+                if (index < routePoints.length - 1) {
+                    const nextPoint = routePoints[index + 1];
+                    const dx = (nextPoint.x - point.x) * canvas.width;
+                    const dy = (nextPoint.y - point.y) * canvas.height;
+                    slope = dy / dx;
+                }
+                
+                // 根据斜率和位置决定文本位置
+                if (Math.abs(slope) < 0.5) {
+                    // 路线较平，文本显示在上方
+                    textY = y - 20;
+                } else {
+                    // 路线较陡，根据x坐标决定左右
+                    if (x < canvas.width / 2) {
+                        // 在左半边，文本显示在右侧
+                        textX = x + 20;
+                        textY = y;
+                    } else {
+                        // 在右半边，文本显示在左侧
+                        textX = x - 20;
+                        textY = y;
+                    }
+                }
+                
+                // 绘制文本背景
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                const padding = 4;
+                ctx.fillRect(
+                    textX - textWidth/2 - padding,
+                    textY - 8,
+                    textWidth + padding * 2,
+                    18
+                );
+                
+                // 绘制文本
+                ctx.fillStyle = index === currentIndex ? '#ff0000' : '#c41e3a';
+                ctx.fillText(point.name, textX, textY);
+            });
+        }
+        
+        // 更新时间线
+        function updateTimeline(progress) {
+            const events = document.querySelectorAll('.event');
+            events.forEach(event => {
+                const eventDate = new Date(event.dataset.date);
+                const startDate = new Date('1934-10');
+                const endDate = new Date('1935-10');
+                
+                const eventProgress = (eventDate - startDate) / (endDate - startDate);
+                
+                if (eventProgress <= progress) {
+                    event.classList.add('active');
+                } else {
+                    event.classList.remove('active');
+                }
+            });
+        }
+        
+        // 修改动画函数
+        function animate(timestamp) {
+            if (!startTime) startTime = timestamp;
+            
+            const elapsed = timestamp - startTime;
+            animationProgress = Math.min(elapsed / animationDuration, 1);
+            
+            // 清除画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 按顺序绘制各个元素
+            drawBackground();
+            drawPoints(animationProgress);
+            drawRoute(animationProgress);
+            
+            // 更新进度条和时间线
+            progressBar.style.width = `${animationProgress * 100}%`;
+            updateTimeline(animationProgress);
+            
+            // 继续动画
+            if (animationProgress < 1 && isAnimating) {
+                requestAnimationFrame(animate);
+            } else {
+                isAnimating = false;
+                startBtn.textContent = '重新开始';
+            }
+        }
+        
+        // 开始动画
+        function startAnimation() {
+            if (isAnimating) return;
+            
+            isAnimating = true;
+            startTime = null;
+            startBtn.textContent = '播放中...';
+            requestAnimationFrame(animate);
+        }
+        
+        // 重置动画
+        function resetAnimation() {
+            isAnimating = false;
+            animationProgress = 0;
+            startTime = null;
+            startBtn.textContent = '开始演示';
+            
+            // 清除画布并重绘初始状态
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            drawPoints(0);
+            drawRoute(0);
+            
+            // 重置进度条
+            progressBar.style.width = '0%';
+            
+            // 重置时间线
+            updateTimeline(0);
+            
+            // 重置音乐状态
+            if (isMusicPlaying) {
+                backgroundMusic.currentTime = 0;
+            }
+        }
+        
+        // 添加事件监听器
+        startBtn.addEventListener('click', startAnimation);
+        resetBtn.addEventListener('click', resetAnimation);
+        
+        // 播放/暂停背景音乐
+        function toggleMusic() {
+            if (isMusicPlaying) {
+                backgroundMusic.pause();
+                musicBtn.textContent = '播放音乐';
+                isMusicPlaying = false;
+            } else {
+                backgroundMusic.play().catch(error => {
+                    console.error('音频播放失败:', error);
+                    // 很多浏览器需要用户交互才能自动播放
+                    alert('请点击"播放音乐"按钮来手动播放背景音乐');
+                });
+                musicBtn.textContent = '暂停音乐';
+                isMusicPlaying = true;
+            }
+        }
+        
+        // 调整音量
+        function adjustVolume() {
+            backgroundMusic.volume = volumeControl.value;
+        }
+        
+        // 添加音频相关事件监听器
+        musicBtn.addEventListener('click', toggleMusic);
+        volumeControl.addEventListener('input', adjustVolume);
+        
+        // 初始化
+        resetAnimation();
+        
+        // 添加日期格式化函数
+        function formatDate(date) {
+            if (date instanceof Date) {
+                const year = date.getFullYear();
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                return `${year}年${month}月`;
+            } else {
+                const [year, month] = date.split('-');
+                return `${year}年${month}月`;
+            }
+        }
+    </script>
+</body>
+</html>

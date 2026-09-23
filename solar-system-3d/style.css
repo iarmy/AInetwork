@@ -1,0 +1,26 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: #111622;
+    color: #fff;
+    font-family: 'Microsoft YaHei', Arial, sans-serif;
+    overflow: hidden;
+}
+
+h1 {
+    font-weight: 400;
+    letter-spacing: 2px;
+    margin-bottom: 0.5em;
+}
+
+#solar-container {
+    width: 100vw;
+    height: 90vh;
+    position: relative;
+    background: radial-gradient(ellipse at center, #23243a 60%, #0a0a18 100%);
+    box-shadow: 0 0 40px #0008 inset;
+}
+
+::-webkit-scrollbar {
+    display: none;
+}

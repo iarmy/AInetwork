@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #f0f9ff;
+      font-family: Arial, sans-serif;
+    }
+
+    .game-box {
+      background: white;
+      padding: 2rem;
+      border-radius: 15px;
+      text-align: center;
+      margin-top: 2rem;
+      transition: transform 0.3s ease;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .game-box:hover {
+      transform: translateY(-5px);
+    }
+
+    #timer {
+      border-radius: 4px;
+      background: linear-gradient(90deg, #ff6b6b 0%, #ffd700 100%);
+      height: 8px;
+      width: 100%;
+      transition: width 1s linear;
+      margin: 1rem 0;
+    }
+
+    .option-btn:active {
+      transform: scale(0.95);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    body {
+      background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+      min-height: 100vh;
+    }
+
+    #question {
+      font-size: 3rem;
+      color: #2c3e50;
+      margin: 1rem 0;
+    }
+
+    .options-container {
+      display: flex;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    
+    .option-btn {
+      font-size: 2rem;
+      padding: 1rem 2rem;
+      border: none;
+      border-radius: 10px;
+      background: #3498db;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .option-btn:hover {
+      transform: scale(1.1);
+      background: #2980b9;
+    }
+    
+    .option-btn.correct {
+      background: #2ecc71 !important;
+    }
+    
+    .option-btn.wrong {
+      background: #e74c3c !important;
+    }
+
+    .feedback {
+      height: 20px;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>10以内的加减法小游戏</h1>
+  <div class="game-box">
+    <div id="timer"></div>
+    <div id="question"></div>
+    <div id="options" class="options-container"></div>
+    <div class="feedback" id="result"></div>
+  </div>
+
+  <script>
+    let timeLeft = 15;
+    let currentAnswer;
+    let timerId = null;
+    let locked = false;   // 答对后 / 超时暂停期间锁住，防止重复点击导致连跳两题
+
+    function generateQuestion() {
+      // 清掉上一题遗留的"✓ 正确"或"时间到"提示
+      document.getElementById('result').textContent = '';
+      locked = false;
+      // 题目限定在「10 以内加减法」，因此结果必须是非负的：
+      // 加法两个加数之和不超过 10，减法的被减数不小于减数。
+      const operator = Math.random() > 0.5 ? '+' : '-';
+      let num1, num2;
+      if (operator === '+') {
+        num1 = Math.floor(Math.random() * 10);
+        num2 = Math.floor(Math.random() * (10 - num1 + 1));
+      } else {
+        num1 = Math.floor(Math.random() * 10) + 1;      // 1 ~ 10
+        num2 = Math.floor(Math.random() * (num1 + 1));  // 0 ~ num1
+      }
+      currentAnswer = operator === '+' ? num1 + num2 : num1 - num2;
+      document.getElementById('question').textContent = 
+        `${num1} ${operator} ${num2} = ?`;
+      generateOptions();
+    }
+
+    function startTimer() {
+      // 先清掉上一轮计时器，避免超时重开后计时器越滚越多
+      if (timerId) clearInterval(timerId);
+      timeLeft = 15;
+      document.getElementById('timer').style.width = '100%';
+
+      timerId = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timer').style.width = 
+          `${(timeLeft/15)*100}%`;
+
+        if(timeLeft <= 0) {
+          clearInterval(timerId);
+          timerId = null;
+          locked = true;   // 这 2 秒暂停期内不接受作答
+          document.getElementById('result').textContent = "时间到! 正确答案是: " + currentAnswer;
+          document.getElementById('result').style.color = "#e74c3c";
+          setTimeout(() => {
+            generateQuestion();
+            startTimer();
+          }, 2000);
+        }
+      }, 1000);
+    }
+
+    function generateOptions() {
+      const options = [currentAnswer];
+      // 生成两个错误答案
+      while(options.length < 3) {
+        let wrongAnswer;
+        if(Math.random() > 0.5) {
+          wrongAnswer = currentAnswer + (Math.random() > 0.5 ? 1 : -1);
+        } else {
+          wrongAnswer = Math.floor(Math.random() * 10);
+        }
+        if(wrongAnswer !== currentAnswer && wrongAnswer >= 0 && wrongAnswer <= 10
+           && !options.includes(wrongAnswer)) {
+          options.push(wrongAnswer);
+        }
+      }
+      // 打乱选项顺序
+      options.sort(() => Math.random() - 0.5);
+      
+      const optionsContainer = document.getElementById('options');
+      optionsContainer.innerHTML = '';
+      
+      options.forEach(answer => {
+        const button = document.createElement('button');
+        button.className = 'option-btn';
+        button.textContent = answer;
+        button.onclick = function() {
+          if(locked) return;   // 已作答（或超时暂停）期间忽略重复点击，避免连跳两题
+          if(parseInt(this.textContent) === currentAnswer) {
+            locked = true;
+            // 答对立刻停表：否则在最后一秒答对时，计时器会继续走到 0，
+            // 弹出"时间到"覆盖掉"✓ 正确"，并让题目一次连跳两题。
+            if(timerId) { clearInterval(timerId); timerId = null; }
+            document.getElementById('result').textContent = "✓ 正确!";
+            document.getElementById('result').style.color = "#2ecc71";
+            this.classList.add('correct');
+            setTimeout(() => {
+              generateQuestion();
+              startTimer();
+            }, 1000);
+          } else {
+            document.getElementById('result').textContent = "✗ 错误 请再试一次";
+            document.getElementById('result').style.color = "#e74c3c";
+            this.classList.add('wrong');
+          }
+          setTimeout(() => {
+            this.classList.remove('correct', 'wrong');
+          }, 1000);
+        };
+        optionsContainer.appendChild(button);
+      });
+    }
+
+    // 初始化游戏
+    generateQuestion();
+    startTimer();
+  </script>
+</body>
+</html>

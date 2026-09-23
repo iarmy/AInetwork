@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课堂点名系统</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>课堂点名系统</h1>
+        </header>
+        
+        <nav>
+            <a href="#" class="active" id="nav-roll-call">点名</a>
+            <a href="#" id="nav-class-manage">班级管理</a>
+            <a href="#" id="nav-student-manage">学生管理</a>
+            <a href="#" id="nav-attendance">考勤记录</a>
+            <a href="#" id="nav-statistics">数据统计</a>
+        </nav>
+        
+        <!-- 点名界面 -->
+        <div class="main-content" id="roll-call-content">
+            <div class="control-panel">
+                <h2>控制面板</h2>
+                <p>当前班级: <span id="current-class">高一(1)班</span></p>
+                <p>总人数: <span id="total-students">0</span></p>
+                <p>已点名: <span id="called-students">0</span></p>
+                <p>出勤: <span id="present-students">0</span></p>
+                <p>迟到: <span id="late-students">0</span></p>
+                <p>缺席: <span id="absent-students">0</span></p>
+                
+                <div class="roll-call-controls">
+                    <button class="btn btn-large" id="random-roll">随机点名</button>
+                    <button class="btn" id="start-roll">开始点名</button>
+                    <button class="btn" id="reset-roll">重置点名</button>
+                </div>
+                
+                <div class="student-card" id="current-student-card" style="display: none;">
+                    <div class="student-photo" id="student-photo">头像</div>
+                    <h2 id="student-name">学生姓名</h2>
+                    <p id="student-id">学号: 12345</p>
+                    
+                    <div class="status-buttons">
+                        <button class="btn" id="btn-present">出勤</button>
+                        <button class="btn btn-tertiary" id="btn-late">迟到</button>
+                        <button class="btn btn-secondary" id="btn-absent">缺席</button>
+                    </div>
+                </div>
+                
+                <div class="import-export">
+                    <h3>数据导入导出</h3>
+                    <input type="file" id="import-file" accept=".csv, .xlsx">
+                    <button class="btn" id="import-btn">导入学生名单</button>
+                    <button class="btn" id="export-btn">导出考勤记录</button>
+                </div>
+            </div>
+            
+            <div class="student-list">
+                <h2>学生名单</h2>
+                <table id="students-table">
+                    <thead>
+                        <tr>
+                            <th>学号</th>
+                            <th>姓名</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="students-table-body">
+                        <!-- 学生数据将通过JavaScript动态添加 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 班级管理界面 -->
+        <div class="main-content" id="class-manage-content" style="display: none;">
+            <div class="control-panel">
+                <h2>班级管理</h2>
+                
+                <div class="class-form">
+                    <h3>添加/编辑班级</h3>
+                    <div class="form-group">
+                        <label for="class-id">班级ID:</label>
+                        <input type="text" id="class-id" placeholder="班级ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="class-name">班级名称:</label>
+                        <input type="text" id="class-name" placeholder="例如：高一(1)班">
+                    </div>
+                    <div class="form-group">
+                        <label for="class-description">班级描述:</label>
+                        <textarea id="class-description" placeholder="班级描述（可选）"></textarea>
+                    </div>
+                    <div class="form-buttons">
+                        <button class="btn" id="save-class">保存班级</button>
+                        <button class="btn btn-secondary" id="clear-class-form">清空表单</button>
+                    </div>
+                </div>
+                
+                <div class="class-actions">
+                    <h3>班级操作</h3>
+                    <button class="btn" id="switch-class">切换班级</button>
+                    <button class="btn btn-secondary" id="delete-class">删除班级</button>
+                </div>
+            </div>
+            
+            <div class="class-list">
+                <h2>班级列表</h2>
+                <table id="classes-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>班级名称</th>
+                            <th>学生数量</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="classes-table-body">
+                        <!-- 班级数据将通过JavaScript动态添加 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 学生管理界面 -->
+        <div class="main-content" id="student-manage-content" style="display: none;">
+            <div class="control-panel">
+                <h2>学生管理</h2>
+                <p>当前班级: <span id="current-class-student">高一(1)班</span></p>
+                
+                <div class="student-form">
+                    <h3>添加/编辑学生</h3>
+                    <div class="form-group">
+                        <label for="student-id">学号:</label>
+                        <input type="text" id="student-id-input" placeholder="学号">
+                    </div>
+                    <div class="form-group">
+                        <label for="student-name-input">姓名:</label>
+                        <input type="text" id="student-name-input" placeholder="姓名">
+                    </div>
+                    <div class="form-group">
+                        <label for="student-photo-input">学生照片:</label>
+                        <input type="file" id="student-photo-input" accept="image/*">
+                        <div class="photo-preview" id="photo-preview"></div>
+                    </div>
+                    <div class="form-buttons">
+                        <button class="btn" id="save-student">保存学生</button>
+                        <button class="btn btn-secondary" id="clear-student-form">清空表单</button>
+                    </div>
+                </div>
+                
+                <div class="batch-actions">
+                    <h3>批量操作</h3>
+                    <input type="file" id="batch-import-file" accept=".csv, .xlsx">
+                    <button class="btn" id="batch-import-btn">批量导入</button>
+                    <button class="btn btn-secondary" id="batch-delete-btn">批量删除</button>
+                </div>
+            </div>
+            
+            <div class="student-management-list">
+                <h2>学生列表</h2>
+                <div class="search-bar">
+                    <input type="text" id="student-search" placeholder="搜索学生...">
+                </div>
+                <table id="students-manage-table">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="select-all-students"></th>
+                            <th>学号</th>
+                            <th>姓名</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="students-manage-table-body">
+                        <!-- 学生数据将通过JavaScript动态添加 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 数据统计界面 -->
+        <div class="main-content" id="statistics-content" style="display: none;">
+            <div class="statistics-panel">
+                <h2>数据统计</h2>
+                <div class="chart-container">
+                    <canvas id="attendanceChart"></canvas>
+                </div>
+                <div class="statistics-grid">
+                    <div class="statistic-card">
+                        <h3>出勤率</h3>
+                        <p id="attendanceRate">0%</p>
+                    </div>
+                    <div class="statistic-card">
+                        <h3>迟到率</h3>
+                        <p id="lateRate">0%</p>
+                    </div>
+                    <div class="statistic-card">
+                        <h3>缺席率</h3>
+                        <p id="absentRate">0%</p>
+                    </div>
+                    <div class="statistic-card">
+                        <h3>总人数</h3>
+                        <p id="totalStudentsStat">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>课堂点名系统 &copy; 2025</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

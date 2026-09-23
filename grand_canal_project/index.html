@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>京杭大运河 - 历史文化之旅</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- 移除内容安全策略，因为在本地文件系统中无法正常工作 -->
+    <script type="text/javascript">
+        window._AMapSecurityConfig = {
+            securityJsCode:'7743f1e3e3d5c9c1d2b7a8f0e5c0e4f',
+        }
+    </script>
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=e8697e03ea2b09507f5b53afb8293420"></script>
+
+</head>
+<body>
+    <!-- SVG Definitions -->
+    <svg xmlns="http://www.w3.org/2000/svg">
+        <symbol id="boat-icon" viewBox="0 0 100 100">
+            <path d="M20,60 L80,60 L70,80 L30,80 Z" fill="#5c3d2e"/>
+            <path d="M40,40 L60,40 L60,60 L40,60 Z" fill="#8b4513"/>
+            <path d="M45,20 L55,20 L55,40 L45,40 Z" fill="#8b4513"/>
+            <path d="M30,60 C30,60 50,50 70,60" fill="none" stroke="#1e4d6b" stroke-width="2"/>
+            <circle cx="50" cy="30" r="5" fill="#d2691e"/>
+        </symbol>
+    </svg>
+    <header>
+        <h1>京杭大运河数字展厅</h1>
+        <nav>
+            <ul>
+                <li><a href="#route">运河路线</a></li>
+                <li><a href="#history">历史渊源</a></li>
+                <li><a href="#culture">文化遗产</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section id="hero">
+            <div class="hero-content">
+                <h2>世界最长的人工运河</h2>
+                <p>跨越2500年的文明纽带，连接南北的文化长廊</p>
+            </div>
+        </section>
+
+        <div class="map-music-wrapper">
+            <section id="route" class="map-section">
+                <h2>运河路线图</h2>
+                <div class="map-container">
+                    <div id="canal-map"></div>
+                </div>
+                <div class="boat-controls" style="text-align:center; margin-top:10px;">
+                    <button id="boatPlay" class="control-btn"><i class="fas fa-play"></i> 播放动画</button>
+                    <button id="boatPause" class="control-btn"><i class="fas fa-pause"></i> 暂停动画</button>
+                    <button id="boatReset" class="control-btn"><i class="fas fa-undo"></i> 重置动画</button>
+                </div>
+                <div class="boat-progress-bar" style="width:60%;margin:10px auto 0 auto;height:8px;background:#eee;border-radius:4px;position:relative;">
+                    <div id="boatProgress" style="height:100%;width:0;background:#1e4d6b;border-radius:4px;transition:width 0.1s;"></div>
+                </div>
+            </section>
+
+            <section id="audio-player" class="music-section">
+                <br> <br> <br>
+                <h3>背景音乐</h3>
+                <div class="player-container">
+                    <audio id="bgMusic" src="assets/canal-music.mp3"></audio>
+                    <div class="player-controls">
+                        <button id="playPause" class="control-btn">
+                            <i class="fas fa-play"></i> 播放
+                        </button>
+                        <div class="progress-bar">
+                            <div id="progress"></div>
+                        </div>
+                        <div class="volume-control">
+                            <i class="fas fa-volume-up"></i>
+                            <input type="range" id="volume" min="0" max="1" step="0.1" value="0.7">
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section id="history" class="history-section">
+            <h2>历史渊源</h2>
+            <div class="history-intro">
+                <p>京杭大运河是世界上最长的人工运河，也是最古老的运河之一。它南起杭州，北至北京，全长约1794公里，是中国古代劳动人民创造的一项伟大工程。</p>
+            </div>
+            <div class="timeline">
+                <div class="timeline-container">
+                    <!-- 第一组时间线项目 -->
+                    <div class="timeline-item" data-era="pre-qin">
+                    <div class="era-marker">先秦</div>
+                    <h3>春秋战国时期（前486年）</h3>
+                    <p>吴王夫差开凿邗沟，连通长江与淮河，开创了中国大运河建设的先河。这条水道不仅用于军事，还促进了江淮地区的经济发展。</p>
+                    <div class="historical-fact">
+                        <i class="fas fa-landmark"></i>
+                        <span>邗沟全长约850里，是当时最重要的交通枢纽之一。</span>
+                    </div>
+                </div>
+
+                <div class="timeline-item" data-era="qin-han">
+                    <div class="era-marker">秦汉</div>
+                    <h3>秦汉时期（前219年-220年）</h3>
+                    <p>秦始皇统一中国后，修建灵渠连通长江与珠江水系。汉代继续拓展水运体系，开凿了白渠等水利工程。</p>
+                    <div class="historical-fact">
+                        <i class="fas fa-water"></i>
+                        <span>灵渠是中国古代南北水系的重要枢纽，被誉为世界水利文化的明珠。</span>
+                    </div>
+                </div>
+
+                <div class="timeline-item" data-era="sui-tang">
+                    <div class="era-marker">隋唐</div>
+                    <h3>隋朝大运河（605-609年）</h3>
+                    <p>隋炀帝杨广下令开凿通济渠、永济渠等，首次实现南北大运河的完整贯通。这一工程虽然耗费巨大，但为后世留下了宝贵的水运遗产。</p>
+                    <div class="historical-fact">
+                        <i class="fas fa-scroll"></i>
+                        <span>隋代大运河全长2500余公里，是当时世界上最长的人工运河。</span>
+                    </div>
+                </div>
+
+                <div class="timeline-item" data-era="song-yuan">
+                    <div class="era-marker">宋元</div>
+                    <h3>宋元时期（960-1368年）</h3>
+                    <p>宋代大运河成为漕运主动脉，年运粮达数百万石。元代开凿通惠河，将大运河延伸至大都（今北京），奠定了今日京杭大运河的基本格局。</p>
+                    <div class="historical-fact">
+                        <i class="fas fa-balance-scale"></i>
+                        <span>宋代运河年运输量达到400万石，约合2.4亿公斤。</span>
+                    </div>
+                </div>
+
+                <div class="timeline-item" data-era="ming-qing">
+                    <div class="era-marker">明清</div>
+                    <h3>明清鼎盛时期（1368-1911年）</h3>
+                    <p>明清时期是大运河发展的黄金时代，漕运制度完善，运河沿线城市繁荣，文化艺术兴盛。诞生了众多文人雅士笔下的运河诗词和江南文化。</p>
+                    <div class="historical-fact">
+                        <i class="fas fa-city"></i>
+                        <span>清代康乾盛世时，运河年运粮超过600万石，达到历史最高水平。</span>
+                    </div>
+                </div>
+
+                <div class="timeline-item" data-era="modern">
+                    <div class="era-marker">现代</div>
+                    <h3>现代发展（2014年至今）</h3>
+                    <p>2014年6月22日，大运河成功申遗，被列入世界遗产名录。这条千年运河见证了中国历史的变迁，今天仍在发挥着重要的经济文化作用。</p>
+                    <div class="historical-fact">
+                        <i class="fas fa-award"></i>
+                        <span>大运河沿线共有27个世界文化遗产点段，展现了悠久的运河文明。</span>
+                    </div>
+                </div>
+            </div>  <!-- 添加闭合标签 -->
+        </div>
+    </section>
+
+    <section id="culture" class="culture-section">
+        <h2>文化遗产</h2>
+        <div class="culture-grid">
+            <a href="ancient-towns.html" class="culture-item">
+                <h3>运河古镇</h3>
+                <p>枕河而居，千年古镇述说运河故事</p>
+                <div class="culture-icon">
+                    <i class="fas fa-archway"></i>
+                </div>
+            </a>
+            <a href="intangible-heritage.html" class="culture-item">
+                <h3>非物质文化遗产</h3>
+                <p>运河文学、民间艺术、传统技艺</p>
+                <div class="culture-icon">
+                    <i class="fas fa-theater-masks"></i>
+                </div>
+            </a>
+            <a href="world-heritage.html" class="culture-item">
+                <h3>世界文化遗产</h3>
+                <p>2014年入选世界文化遗产名录</p>
+                <div class="culture-icon">
+                    <i class="fas fa-globe-asia"></i>
+                </div>
+            </a>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <p> 2025 京杭大运河文化数字展示</p>
+</footer>
+
+    <!-- 在body底部加载脚本 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/gsap/3.7.1/gsap.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/gsap/3.7.1/ScrollTrigger.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/gsap/3.7.1/ScrollToPlugin.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/gsap/3.7.1/MotionPathPlugin.min.js"></script>
+    <script src="script_enhanced.js"></script>
+</body>
+</html>

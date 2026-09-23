@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 手势课堂反馈 · 数学</title>
+<!--
+  ============================================================
+  AI 手势课堂反馈（数学）
+  ------------------------------------------------------------
+  用途：课堂即时反馈。老师投出选择题，学生对着摄像头用手指比出
+       选项号（1~4 根手指 = A~D），屏幕实时显示全班的答案分布，
+       老师可随时定格、公布答案看正确率。
+
+  为什么不做 1~5：只数【食指/中指/无名指/小指】四根手指，
+       用"指尖离手腕比第二关节更远"判定，稳定可靠；
+       竖大拇指的判定在真实教室光照下容易抖，所以答项定为 4 个。
+
+  识别引擎与模型全部本地化（lib/、model/），不联网也能跑。
+  ============================================================
+-->
+<style>
+:root {
+  --bg:      #0b1017;
+  --panel:   #141c27;
+  --panel-2: #1b2533;
+  --line:    #27323f;
+  --ink:     #e8eef7;
+  --dim:     #8fa2b8;
+  --brand:   #4dd0e1;
+  --brand-2: #7c9cff;
+  --ok:      #34d399;
+  --bad:     #f87171;
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", "Noto Sans SC", "Segoe UI", Roboto, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 背景光晕 */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 18% 8%, rgba(77,208,225,.10), transparent 62%),
+    radial-gradient(760px 460px at 88% 92%, rgba(124,156,255,.10), transparent 62%);
+}
+
+.app {
+  position: relative; z-index: 1;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+/* ---------------- 顶栏 ---------------- */
+.topbar {
+  display: flex; align-items: center; gap: 18px;
+  padding: 14px 26px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(20, 28, 39, .72);
+}
+.brand { font-size: 1.16rem; font-weight: 700; letter-spacing: .5px; }
+.brand .sub {
+  font-size: .74rem; font-weight: 600; letter-spacing: .12em;
+  color: var(--brand);
+  border: 1px solid rgba(77,208,225,.4);
+  border-radius: 999px;
+  padding: 3px 10px; margin-left: 10px;
+  vertical-align: middle;
+}
+.spacer { flex: 1; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: .85rem; color: var(--dim);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 15px;
+}
+.pill .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 4px rgba(52,211,153,.16);
+}
+.pill.paused .dot { background: #fbbf24; box-shadow: 0 0 0 4px rgba(251,191,36,.16); }
+.pill .hands { color: var(--ink); font-weight: 700; }
+.pill.demo-pill {
+  color: #fcd34d; border-color: rgba(251,191,36,.45);
+  background: rgba(251,191,36,.10);
+}
+.pill.demo-pill.hidden { display: none; }
+
+.progress { font-size: .9rem; color: var(--dim); }
+.progress b { color: var(--ink); font-size: 1.16rem; }
+
+/* ---------------- 主区 ---------------- */
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(340px, .95fr);
+  gap: 22px;
+  padding: 22px 26px;
+  min-height: 0;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+/* 题目卡 */
+.question { padding: 30px 34px; display: flex; flex-direction: column; min-height: 0; }
+.qtag {
+  font-size: .82rem; letter-spacing: .1em; color: var(--brand);
+  margin-bottom: 14px;
+}
+.qtext {
+  font-size: clamp(26px, 3.4vw, 46px);
+  font-weight: 800; line-height: 1.35;
+  letter-spacing: .5px;
+  margin-bottom: 26px;
+}
+.options {
+  list-style: none;
+  display: grid; gap: 12px;
+  flex: 1; min-height: 0;
+  grid-auto-rows: 1fr;      /* 4 个选项均分卡片高度，投影上更醒目 */
+}
+.options li {
+  display: flex; align-items: center; gap: 16px;
+  min-height: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 14px 20px;
+  transition: border-color .25s, background .25s, transform .25s;
+}
+.options li .letter {
+  flex: none;
+  width: 40px; height: 40px; border-radius: 10px;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 1.06rem;
+  background: #223044; color: var(--brand);
+}
+.options li .optText { font-size: clamp(17px, 1.7vw, 24px); }
+.options li .fingers {
+  margin-left: auto; flex: none;
+  font-size: .78rem; color: var(--dim);
+  border: 1px dashed var(--line);
+  border-radius: 999px; padding: 4px 11px;
+  white-space: nowrap;
+}
+/* 实时票数：把柱状图和选项绑在一起，老师一眼看到对应关系 */
+.options li .votes {
+  flex: none; min-width: 62px; text-align: right;
+  font-size: .95rem; color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  transition: color .25s;
+}
+.options li .votes b { font-size: 1.5rem; color: var(--ink); }
+.options li.has-vote { border-color: rgba(77,208,225,.55); background: #17232f; }
+.options li.has-vote .votes { color: var(--brand); }
+.options li.is-correct { border-color: var(--ok); background: rgba(52,211,153,.10); }
+.options li.is-correct .letter { background: rgba(52,211,153,.2); color: var(--ok); }
+.options li.is-correct .votes b { color: var(--ok); }
+.options li.is-wrong { opacity: .55; }
+.options li.is-wrong .letter { background: #2a1e22; color: #b98b8b; }
+
+/* 统计侧栏 */
+.side { padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.side h2 {
+  font-size: .95rem; font-weight: 700; letter-spacing: .06em;
+  display: flex; align-items: center; gap: 9px;
+}
+.side h2 .tag {
+  margin-left: auto; font-size: .74rem; font-weight: 600;
+  color: var(--dim); letter-spacing: .04em;
+}
+
+.bars {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; align-items: end;
+  height: 190px; flex: none;
+  padding: 8px 4px 0;
+}
+.bar { display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; }
+.bar .count {
+  font-size: 1.5rem; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+  transition: color .25s;
+}
+.bar .track {
+  position: relative; flex: 1; width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  overflow: hidden;
+  display: flex; align-items: flex-end;
+}
+.bar .fill {
+  width: 100%;
+  height: 0;
+  background: linear-gradient(180deg, var(--brand), #2b8fa3);
+  border-radius: 10px 10px 0 0;
+  transition: height .28s cubic-bezier(.2,.8,.3,1), background .3s;
+}
+.bar .name { font-size: .86rem; color: var(--dim); font-weight: 600; }
+.bar.has-vote .count { color: var(--ink); }
+.bar.is-correct .fill { background: linear-gradient(180deg, var(--ok), #12855f); }
+.bar.is-correct .count, .bar.is-correct .name { color: var(--ok); }
+.bar.is-wrong .fill { background: linear-gradient(180deg, #6b3b3b, #46292b); }
+.bar.is-wrong .count, .bar.is-wrong .name { color: #a97e7e; }
+
+.verdict {
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--panel-2);
+  padding: 13px 16px;
+  font-size: .92rem; color: var(--dim);
+  min-height: 62px;
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+}
+.verdict b { color: var(--ink); font-size: 1.05rem; }
+.verdict.ok b { color: var(--ok); }
+.verdict .rate { font-size: 1.9rem; font-weight: 800; color: var(--ok); }
+
+/* 摄像头小窗 */
+.camwrap {
+  position: relative;
+  border-radius: 13px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0a0e14;
+  aspect-ratio: 16 / 10;
+  flex: none;
+  margin-top: auto;
+}
+#cam { width: 100%; height: 100%; display: block; }
+.camlabel {
+  position: absolute; left: 10px; top: 10px;
+  font-size: .72rem; letter-spacing: .06em;
+  color: rgba(255,255,255,.75);
+  background: rgba(8,12,20,.6);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px; padding: 4px 10px;
+  backdrop-filter: blur(4px);
+}
+
+/* ---------------- 底部工具栏 ---------------- */
+.toolbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 26px 18px;
+  border-top: 1px solid var(--line);
+  background: rgba(20, 28, 39, .72);
+  flex-wrap: wrap;
+}
+button {
+  font: inherit; font-size: .95rem; font-weight: 600;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 11px 20px;
+  cursor: pointer;
+  transition: all .18s ease;
+}
+button:hover:not(:disabled) { background: #24304012; border-color: #3a4a5e; transform: translateY(-1px); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.primary {
+  background: linear-gradient(135deg, var(--brand), #2b8fa3);
+  border-color: transparent; color: #04212a;
+}
+button.warn {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  border-color: transparent; color: #3a2600;
+}
+.toolbar .keys {
+  margin-left: auto; font-size: .8rem; color: var(--dim);
+}
+.toolbar kbd {
+  font: inherit; font-size: .74rem;
+  background: #1f2a38; border: 1px solid var(--line);
+  border-radius: 6px; padding: 2px 7px; color: var(--dim);
+}
+
+/* ---------------- 覆盖层 ---------------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 20px; padding: 40px;
+  text-align: center;
+  background: radial-gradient(1100px 640px at 50% 42%, #16202e 0%, #080c11 68%);
+}
+.overlay.hidden { display: none; }
+.overlay h1 { font-size: clamp(26px, 3.6vw, 44px); font-weight: 800; letter-spacing: 1px; }
+.overlay p { color: var(--dim); font-size: 1.02rem; line-height: 1.8; max-width: 720px; }
+.overlay .how {
+  display: flex; gap: 26px; flex-wrap: wrap; justify-content: center;
+  margin-top: 4px;
+}
+.overlay .how div {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 16px 22px; min-width: 168px;
+}
+.overlay .how .n { font-size: 1.7rem; font-weight: 800; color: var(--brand); }
+.overlay .how .t { font-size: .88rem; color: var(--dim); margin-top: 6px; }
+.overlay button { padding: 14px 34px; font-size: 1.05rem; }
+
+.spin {
+  width: 42px; height: 42px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.14);
+  border-top-color: var(--brand);
+  animation: spin .9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#errText { white-space: pre-wrap; color: #fca5a5; font-size: .95rem; }
+
+/* 采集用的 video 不参与排版，但不能用 display:none ——
+   部分浏览器会因此停止解码，detectForVideo 拿不到帧。
+   用 1px + 透明 + 移出可视区的方式藏起来。 */
+#src {
+  position: fixed; top: 0; left: 0;
+  width: 2px; height: 2px;
+  opacity: 0; pointer-events: none;
+  z-index: -1;
+}
+
+@media (max-width: 1080px) {
+  .stage { grid-template-columns: 1fr; }
+  .side { order: -1; }
+  .bars { height: 130px; }
+  .camwrap { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">AI 手势课堂反馈<span class="sub">数学</span></div>
+    <div class="spacer"></div>
+    <div class="pill" id="livePill"><span class="dot"></span><span id="liveText">识别中</span>
+      <span class="hands">识别到 <b id="handCount">0</b> 只手</span></div>
+    <div class="pill demo-pill hidden" id="demoPill">彩排模式 · 模拟数据</div>
+    <div class="progress">第 <b id="qNo">1</b> / <span id="qTotal">8</span> 题</div>
+  </header>
+
+  <main class="stage">
+    <section class="card question">
+      <div class="qtag">用手指比出选项号：1~4 根手指 = A~D</div>
+      <div class="qtext" id="qText">—</div>
+      <ul class="options" id="options"></ul>
+    </section>
+
+    <aside class="card side">
+      <h2>当堂统计 <span class="tag" id="modeTag">实时</span></h2>
+      <div class="bars" id="bars"></div>
+      <div class="verdict" id="verdict">比出手指开始投票，点「定格统计」锁定本轮结果。</div>
+      <div class="camwrap">
+        <canvas id="cam"></canvas>
+        <div class="camlabel">摄像头预览 · 手势骨架</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="toolbar">
+    <button class="primary" id="freezeBtn">定格统计</button>
+    <button class="warn" id="revealBtn">公布答案</button>
+    <button id="prevBtn">上一题</button>
+    <button id="nextBtn">下一题</button>
+    <button id="resetBtn">重置</button>
+    <span class="keys">
+      <kbd>空格</kbd> 定格/继续 · <kbd>Enter</kbd> 公布答案 · <kbd>←</kbd><kbd>→</kbd> 换题 · <kbd>R</kbd> 重置
+    </span>
+  </footer>
+</div>
+
+<!-- 启动 / 加载 / 出错 -->
+<div class="overlay" id="startOverlay">
+  <h1>AI 手势课堂反馈 · 数学</h1>
+  <p>老师投出选择题，学生对着摄像头用手指比出选项号，<br>屏幕实时统计出全班的答案分布。</p>
+  <div class="how">
+    <div><div class="n">1 指</div><div class="t">选 A</div></div>
+    <div><div class="n">2 指</div><div class="t">选 B</div></div>
+    <div><div class="n">3 指</div><div class="t">选 C</div></div>
+    <div><div class="n">4 指</div><div class="t">选 D</div></div>
+  </div>
+  <p style="font-size:.9rem">
+    只统计【食指 / 中指 / 无名指 / 小指】，请把手掌正对镜头、手指张开。<br>
+    识别引擎与模型已本地化，<b>不联网也能跑</b>；需要允许摄像头权限。<br>
+    没有摄像头？在地址后面加 <code>?demo=1</code> 进入<b>彩排模式</b>，用模拟手势预览界面。
+  </p>
+  <button class="primary" id="startBtn">允许摄像头并开始</button>
+</div>
+
+<div class="overlay hidden" id="loadOverlay">
+  <div class="spin"></div>
+  <p>正在加载摄像头与手势识别模型…</p>
+</div>
+
+<div class="overlay hidden" id="errOverlay">
+  <h1>启动失败</h1>
+  <p id="errText"></p>
+  <button id="retryBtn">重试</button>
+</div>
+
+<video id="src" playsinline muted></video>
+
+<script type="module">
+import { FilesetResolver, HandLandmarker } from './lib/vision_bundle.js';
+
+/* ============================================================
+   可改配置
+   ============================================================ */
+const CONFIG = {
+  MODEL_URL: './model/hand_landmarker.task',
+  WASM_URL: './lib/wasm',
+  MAX_HANDS: 4,          // 同时识别的手数（教室里可能几只手一起比）
+  STABLE_FRAMES: 5,      // 同一只手连续多少帧结果一致才计入（防抖）
+  MISS_FRAMES: 8,        // 连续多少帧没看到就认为这只手放下了
+  FINGER_RATIO: 1.08,    // 指尖离手腕 > 第二关节离手腕 × 该系数 → 判定伸直
+};
+
+/* ------------------------------------------------------------
+   题库：小学数学选择题，每题 4 个选项
+   answer 是正确选项的下标（0=A, 1=B, 2=C, 3=D）
+   ------------------------------------------------------------ */
+const QUESTIONS = [
+  { q: '3 + 4 = ?',                                   options: ['5', '6', '7', '8'],                       answer: 2 },
+  { q: '9 − 5 = ?',                                   options: ['2', '4', '5', '6'],                       answer: 1 },
+  { q: '6 × 7 = ?',                                   options: ['36', '40', '42', '56'],                   answer: 2 },
+  { q: '下面哪个数是质数？',                            options: ['23', '15', '21', '9'],                    answer: 0 },
+  { q: '三角形的内角和是多少度？',                       options: ['90°', '180°', '270°', '360°'],            answer: 1 },
+  { q: '0.5 等于下面哪个分数？',                         options: ['1/5', '1/4', '1/3', '1/2'],               answer: 3 },
+  { q: '圆的周长公式是？',                              options: ['πr²', '2πr', 'πd²', '4πr'],              answer: 1 },
+  { q: '一件商品原价 100 元，打八折后是多少元？',          options: ['80 元', '88 元', '92 元', '98 元'],        answer: 0 },
+];
+
+const LETTERS = ['A', 'B', 'C', 'D'];
+
+/* MediaPipe 手部关键点索引 */
+const WRIST = 0;
+const FINGERS = [[5, 6, 8], [9, 10, 12], [13, 14, 16], [17, 18, 20]];  // 食指/中指/无名指/小指
+const CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17],
+];
+
+/* ============================================================
+   DOM
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const video    = $('src');
+const camCv    = $('cam');
+const camCtx   = camCv.getContext('2d');
+const $qText   = $('qText');
+const $options = $('options');
+const $bars    = $('bars');
+const $verdict = $('verdict');
+const $qNo     = $('qNo');
+const $qTotal  = $('qTotal');
+const $handCnt = $('handCount');
+const $livePill= $('livePill');
+const $liveText= $('liveText');
+const $modeTag = $('modeTag');
+const $freeze  = $('freezeBtn');
+const $reveal  = $('revealBtn');
+const $prev    = $('prevBtn');
+const $next    = $('nextBtn');
+const $reset   = $('resetBtn');
+
+/* ============================================================
+   状态
+   ============================================================ */
+let handLandmarker = null;
+
+const state = {
+  index: 0,          // 当前题号
+  tally: [0, 0, 0, 0],
+  frozen: false,     // 是否已定格
+  revealed: false,   // 是否已公布答案
+  handCount: 0,
+  tracks: new Map(), // 手部跟踪：key -> { last, frames, value, miss }
+  frames: 0,         // 已经跑过的帧数（用于判断"启动很久却一直没识别到手"）
+  everDetected: false,
+  detectError: '',   // 最近一次识别报错，非空时直接显示在界面上
+};
+
+/* ============================================================
+   手指数识别
+   ------------------------------------------------------------
+   只数【食指 / 中指 / 无名指 / 小指】四根，判据是
+   "指尖到手腕的距离 > 第二关节到手腕的距离"。
+   - 不数大拇指："拇指竖起"的判定在真实教室光照下很容易抖。
+   - 优先用 worldLandmarks（真实三维米制坐标）：手掌朝向镜头、手指被透视压缩时，
+     二维投影会把伸直的指头算短，三维距离不受这个影响。
+   ============================================================ */
+function dist(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
+}
+function fingerExtended(lm, tip, pip) {
+  return dist(lm[tip], lm[WRIST]) > dist(lm[pip], lm[WRIST]) * CONFIG.FINGER_RATIO;
+}
+function countFingers(lm) {
+  return FINGERS.reduce((n, f) => n + (fingerExtended(lm, f[2], f[1]) ? 1 : 0), 0);
+}
+
+/* 给每只手一个临时身份：左右手 + 画面左右半区。
+   MediaPipe 不提供稳定的手部 ID，用这个近似够课堂统计用。 */
+function handKey(lm, label) {
+  const xBin = lm[WRIST].x < 0.5 ? 0 : 1;
+  return `${label}-${xBin}`;
+}
+
+/* ------------------------------------------------------------
+   彩排模式：访问 index.html?demo=1 时不开摄像头，
+   用脚本生成的模拟手势跑完整套界面，方便课前试讲、或没有摄像头的电脑上
+   预览效果。界面上会明确标出"彩排模式 · 模拟数据"，不会和真实识别混淆。
+   ------------------------------------------------------------ */
+const DEMO = new URLSearchParams(location.search).has('demo');
+const DEMO_SCRIPT = [
+  { hold: 3400, counts: [2, 2, 3, 2] },
+  { hold: 3400, counts: [2, 3, 2, 2] },
+  { hold: 3400, counts: [3, 3, 2, 1] },
+  { hold: 3400, counts: [2, 2, 2, 3] },
+];
+
+function synthesizeHand(fingers, x, label) {
+  const wrist = { x, y: 0.92, z: 0 };
+  const lm = Array.from({ length: 21 }, () => ({ ...wrist }));
+  lm[0] = wrist;
+  FINGERS.forEach(([mcp, pip, tip], i) => {
+    const k = 0.18 + i * 0.06;
+    const at = v => ({ x: wrist.x + v * k, y: wrist.y - v, z: 0 });
+    lm[mcp] = at(0.10);
+    lm[pip] = at(0.16);
+    lm[tip] = at(fingers[i] ? 0.27 : 0.09);   // 弯指时指尖比第二关节更靠近手腕
+  });
+  return { lm, label, count: fingers.filter(Boolean).length };
+}
+
+function demoHands(t) {
+  const total = DEMO_SCRIPT.reduce((a, s) => a + s.hold, 0);
+  let acc = t % total, step = DEMO_SCRIPT[0];
+  for (const s of DEMO_SCRIPT) { if (acc < s.hold) { step = s; break; } acc -= s.hold; }
+
+  const n = step.counts.length;
+  return step.counts.map((c, i) => {
+    const x = n === 1 ? 0.5 : 0.24 + 0.52 * (i / (n - 1));
+    const label = i % 2 ? 'Left' : 'Right';          // 与 x 分档组合出唯一 key
+    const fingers = [0, 1, 2, 3].map(k => k < c);    // 前 c 根伸直 = 比出数字 c
+    return synthesizeHand(fingers, x, label);
+  });
+}
+
+/* ============================================================
+   界面渲染
+   ============================================================ */
+function buildOptions() {
+  $options.innerHTML = '';
+  QUESTIONS[state.index].options.forEach((text, i) => {
+    const li = document.createElement('li');
+    li.dataset.i = i;
+    li.innerHTML =
+      `<span class="letter">${LETTERS[i]}</span>` +
+      `<span class="optText"></span>` +
+      `<span class="votes"><b>0</b> 票</span>` +
+      `<span class="fingers">${i + 1} 指</span>`;
+    li.querySelector('.optText').textContent = text;
+    $options.appendChild(li);
+  });
+}
+
+function buildBars() {
+  $bars.innerHTML = '';
+  LETTERS.forEach((L, i) => {
+    const d = document.createElement('div');
+    d.className = 'bar';
+    d.dataset.i = i;
+    d.innerHTML =
+      `<div class="count">0</div>` +
+      `<div class="track"><div class="fill"></div></div>` +
+      `<div class="name">${L}</div>`;
+    $bars.appendChild(d);
+  });
+}
+
+function renderQuestion() {
+  $qText.textContent = QUESTIONS[state.index].q;
+  $qNo.textContent = state.index + 1;
+  $qTotal.textContent = QUESTIONS.length;
+  $prev.disabled = state.index === 0;
+  $next.disabled = state.index === QUESTIONS.length - 1;
+}
+
+function renderTally() {
+  const t = state.tally;
+  const max = Math.max(1, ...t);   // 动态满格，人少的时候柱子也看得出来差
+
+  $bars.querySelectorAll('.bar').forEach((bar, i) => {
+    const n = t[i];
+    bar.classList.toggle('has-vote', n > 0 && !state.revealed);
+    bar.querySelector('.count').textContent = n;
+    bar.querySelector('.fill').style.height = n ? Math.max(8, (n / max) * 100) + '%' : '0';
+  });
+
+  $options.querySelectorAll('li').forEach((li, i) => {
+    li.classList.toggle('has-vote', t[i] > 0 && !state.revealed);
+    li.querySelector('.votes b').textContent = t[i];
+  });
+}
+
+function renderReveal() {
+  const correct = QUESTIONS[state.index].answer;
+  const total = state.tally.reduce((a, b) => a + b, 0);
+
+  $bars.querySelectorAll('.bar').forEach((bar, i) => {
+    bar.classList.remove('has-vote');
+    bar.classList.toggle('is-correct', i === correct);
+    bar.classList.toggle('is-wrong', i !== correct && state.tally[i] > 0);
+  });
+  $options.querySelectorAll('li').forEach((li, i) => {
+    li.classList.remove('has-vote');
+    li.classList.toggle('is-correct', i === correct);
+    li.classList.toggle('is-wrong', i !== correct);
+  });
+
+  const right = state.tally[correct];
+  if (total === 0) {
+    $verdict.className = 'verdict';
+    $verdict.innerHTML = `正确答案是 <b>${LETTERS[correct]}</b>，本轮还没有收到投票。`;
+  } else {
+    const rate = Math.round((right / total) * 100);
+    $verdict.className = 'verdict ok';
+    $verdict.innerHTML =
+      `<div>正确答案 <b>${LETTERS[correct]}</b> · 答对 <b>${right}</b> / ${total} 票</div>` +
+      `<div class="rate">${rate}%</div>`;
+  }
+}
+
+function renderLive() {
+  const hands = state.handCount;
+  if ($handCnt.textContent !== String(hands)) $handCnt.textContent = hands;
+
+  if (state.frozen) {
+    $livePill.classList.add('paused');
+    $liveText.textContent = '已定格';
+    $modeTag.textContent = '已定格';
+  } else {
+    $livePill.classList.remove('paused');
+    $liveText.textContent = '识别中';
+    $modeTag.textContent = '实时';
+  }
+
+  // 这段每帧都会调用，内容没变就不要重写 DOM（否则 60fps 下会闪）
+  const total = state.tally.reduce((a, b) => a + b, 0);
+  if (state.revealed) return;
+
+  // 识别坏了要显式说出来，不能只是安静地显示 0 只手
+  if (state.detectError) {
+    const html = `<div style="color:#fca5a5">识别出错：${state.detectError}<br>请刷新页面重试。</div>`;
+    if ($verdict.dataset.html !== html) {
+      $verdict.className = 'verdict';
+      $verdict.innerHTML = html;
+      $verdict.dataset.html = html;
+    }
+    return;
+  }
+
+  const text = state.frozen
+    ? (total ? `本轮定格：共 <b>${total}</b> 票。点「公布答案」看看正确率。`
+             : `本轮定格：还没有收到投票，请学生把手掌正对镜头、手指张开。`)
+    : (total ? `实时统计中：画面内共 <b>${total}</b> 只手在投票。`
+             : (state.frames > 600 && !state.everDetected
+                 ? `一直没有识别到手：请把手掌正对镜头、离近一些，并保证光线充足（已运行 ${Math.round(state.frames / 60)} 秒）。`
+                 : `等待投票：请学生用手指比出选项号（1~4 根手指 = A~D）。`));
+  // 必须整体包一层 div：.verdict 是 flex 容器，散着的文字和 <b> 会被
+  // 拆成多个 flex item，各占一行，句子就断行了。
+  const html = `<div>${text}</div>`;
+  if ($verdict.dataset.html !== html) {
+    $verdict.className = 'verdict';
+    $verdict.innerHTML = html;
+    $verdict.dataset.html = html;
+  }
+}
+
+/* ============================================================
+   统计更新
+   ------------------------------------------------------------
+   每帧把画面里的手映射成 key，逐个做"连续 N 帧一致"的防抖，
+   只有稳定下来的手才计入票数；手离开画面若干帧后自动移除。
+   ============================================================ */
+function updateTally(hands) {
+  const seen = new Set();
+
+  hands.forEach(h => {
+    const key = handKey(h.lm, h.label);
+    seen.add(key);
+    let t = state.tracks.get(key);
+    if (!t) { t = { last: -1, frames: 0, value: 0, miss: 0 }; state.tracks.set(key, t); }
+
+    t.miss = 0;
+    if (h.count === t.last) t.frames++;
+    else { t.last = h.count; t.frames = 1; }
+
+    if (t.frames >= CONFIG.STABLE_FRAMES) t.value = h.count;  // 1~4 才算有效
+  });
+
+  // 没看到的手：连续若干帧后才移除，容忍识别偶发丢帧
+  for (const [key, t] of state.tracks) {
+    if (seen.has(key)) continue;
+    if (++t.miss >= CONFIG.MISS_FRAMES) state.tracks.delete(key);
+  }
+
+  if (state.frozen) return;
+
+  const tally = [0, 0, 0, 0];
+  for (const t of state.tracks.values()) {
+    if (t.value >= 1 && t.value <= 4) tally[t.value - 1]++;
+  }
+  // 只有票数真的变了才重画，避免每帧刷 DOM
+  if (tally.some((n, i) => n !== state.tally[i])) {
+    state.tally = tally;
+    renderTally();
+  }
+}
+
+/* ============================================================
+   摄像头画面 + 骨架
+   ============================================================ */
+function drawCam(hands) {
+  const w = camCv.width, h = camCv.height;
+
+  if (DEMO) {
+    // 彩排模式没有真实画面，画一块占位，避免误以为是识别出了问题
+    camCtx.fillStyle = '#0d141d';
+    camCtx.fillRect(0, 0, w, h);
+    camCtx.fillStyle = 'rgba(252,211,77,.85)';
+    camCtx.font = `700 ${Math.max(15, w / 34)}px ${getComputedStyle(document.body).fontFamily}`;
+    camCtx.textAlign = 'center';
+    camCtx.fillText('彩排模式 · 未接入摄像头', w / 2, h / 2 - 6);
+    camCtx.fillStyle = 'rgba(143,162,184,.9)';
+    camCtx.font = `500 ${Math.max(12, w / 46)}px ${getComputedStyle(document.body).fontFamily}`;
+    camCtx.fillText('下面的票数来自模拟手势', w / 2, h / 2 + 24);
+    return;
+  }
+
+  camCtx.save();
+  // 镜像绘制，学生看到的和自己一致
+  camCtx.translate(w, 0); camCtx.scale(-1, 1);
+  camCtx.drawImage(video, 0, 0, w, h);
+  camCtx.restore();
+
+  camCtx.lineWidth = Math.max(2, w / 320);
+  hands.forEach(hd => {
+    const lm = hd.lm;
+    camCtx.strokeStyle = hd.count >= 1 && hd.count <= 4 ? '#4dd0e1' : 'rgba(255,255,255,.45)';
+    camCtx.beginPath();
+    CONNECTIONS.forEach(([a, b]) => {
+      camCtx.moveTo((1 - lm[a].x) * w, lm[a].y * h);
+      camCtx.lineTo((1 - lm[b].x) * w, lm[b].y * h);
+    });
+    camCtx.stroke();
+
+    camCtx.fillStyle = '#ff5c7a';
+    lm.forEach(p => {
+      camCtx.beginPath();
+      camCtx.arc((1 - p.x) * w, p.y * h, Math.max(1.6, w / 420), 0, Math.PI * 2);
+      camCtx.fill();
+    });
+
+    // 在手腕附近标出识别到的手指数
+    const wx = (1 - lm[WRIST].x) * w, wy = lm[WRIST].y * h;
+    const label = hd.count >= 1 && hd.count <= 4 ? `${hd.count} 指 → ${LETTERS[hd.count - 1]}` : `${hd.count} 指`;
+    camCtx.font = `700 ${Math.max(13, w / 44)}px ${getComputedStyle(document.body).fontFamily}`;
+    camCtx.textAlign = 'center';
+    const tw = camCtx.measureText(label).width + 16;
+    const ty = Math.min(h - 12, wy + 34);
+    camCtx.fillStyle = 'rgba(8,12,20,.78)';
+    camCtx.beginPath();
+    camCtx.roundRect(wx - tw / 2, ty - 20, tw, 26, 8);
+    camCtx.fill();
+    camCtx.fillStyle = '#e8eef7';
+    camCtx.fillText(label, wx, ty);
+  });
+}
+
+/* ============================================================
+   主循环
+   ============================================================ */
+function detectHands(now) {
+  const res = handLandmarker.detectForVideo(video, now);
+  // 注意字段名：本地用的是 Tasks 版 HandLandmarker，结果是 `landmarks`；
+  // `multiHandLandmarks` 是旧版 Hands 方案的字段，在 Tasks 版里恒为 undefined，
+  // 读错就会永远"识别到 0 只手"（骨架、票数全都出不来）。
+  // 两个都读一下，免得将来换引擎又踩同一个坑。
+  const lms = res.landmarks || res.multiHandLandmarks || [];
+  const world = res.worldLandmarks || [];
+  const handed = res.handednesses || res.handedness || res.multiHandedness || [];
+  return lms.map((lm, i) => ({
+    lm,                                     // 归一化坐标：用来画骨架
+    world: world[i] || null,                // 三维米制坐标：用来数手指，更稳
+    label: (handed[i] && handed[i][0] && handed[i][0].categoryName) || 'Hand',
+    count: countFingers(world[i] || lm),
+  }));
+}
+
+function loop() {
+  const now = performance.now();
+  let hands = [];
+  try {
+    hands = DEMO ? demoHands(now) : detectHands(now);
+    state.detectError = '';
+  } catch (e) {
+    // 单帧识别失败不打断循环，但必须让错误"看得见"——
+    // 否则识别一旦坏掉，界面只是安静地一直显示 0 只手，很难排查。
+    console.warn('识别帧出错：', e);
+    state.detectError = (e && e.message) || String(e);
+  }
+  state.frames++;
+  if (hands.length) state.everDetected = true;
+
+  state.handCount = hands.length;
+  updateTally(hands);
+  drawCam(hands);
+  renderLive();
+
+  requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   交互
+   ============================================================ */
+function toggleFreeze() {
+  state.frozen = !state.frozen;
+  $freeze.textContent = state.frozen ? '继续实时' : '定格统计';
+  renderLive();
+}
+
+function doReveal() {
+  if (!state.frozen) { state.frozen = true; $freeze.textContent = '继续实时'; }
+  state.revealed = true;
+  renderReveal();
+  renderLive();
+}
+
+function go(delta) {
+  const next = state.index + delta;
+  if (next < 0 || next >= QUESTIONS.length) return;
+  state.index = next;
+  resetRound();
+  renderQuestion();
+}
+
+/* 清掉上一题的"正确/错误"高亮。
+   柱状图是常驻元素（不像选项那样每次重建），必须显式复位，
+   否则换题之后上一题的正确答案还亮着。 */
+function clearRevealMarks() {
+  $bars.querySelectorAll('.bar')
+    .forEach(b => b.classList.remove('is-correct', 'is-wrong', 'has-vote'));
+  $options.querySelectorAll('li')
+    .forEach(li => li.classList.remove('is-correct', 'is-wrong', 'has-vote'));
+}
+
+function resetRound() {
+  state.tally = [0, 0, 0, 0];
+  state.frozen = false;
+  state.revealed = false;
+  state.tracks.clear();
+  $freeze.textContent = '定格统计';
+  $verdict.className = 'verdict';
+  $verdict.dataset.html = '';
+  buildOptions();
+  clearRevealMarks();
+  renderTally();
+  renderLive();
+}
+
+$freeze.addEventListener('click', toggleFreeze);
+$reveal.addEventListener('click', doReveal);
+$prev.addEventListener('click', () => go(-1));
+$next.addEventListener('click', () => go(1));
+$reset.addEventListener('click', resetRound);
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space')      { e.preventDefault(); toggleFreeze(); }
+  else if (e.key === 'Enter')  { e.preventDefault(); doReveal(); }
+  else if (e.key === 'ArrowLeft')  { go(-1); }
+  else if (e.key === 'ArrowRight') { go(1); }
+  else if (e.key === 'r' || e.key === 'R') { resetRound(); }
+});
+
+/* ============================================================
+   启动
+   ============================================================ */
+async function initCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await video.play();
+  await new Promise(r => { if (video.videoWidth) r(); else video.onloadedmetadata = r; });
+  camCv.width = 640;
+  camCv.height = Math.round(640 * (video.videoHeight / video.videoWidth)) || 400;
+}
+
+async function initModel() {
+  const vision = await FilesetResolver.forVisionTasks(CONFIG.WASM_URL);
+  const base = { modelAssetPath: CONFIG.MODEL_URL };
+  const opts = delegate => ({
+    baseOptions: { ...base, delegate },
+    runningMode: 'VIDEO',
+    numHands: CONFIG.MAX_HANDS,
+    minHandDetectionConfidence: 0.5,
+    minHandPresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+  });
+  try {
+    handLandmarker = await HandLandmarker.createFromOptions(vision, opts('GPU'));
+  } catch (e) {
+    console.warn('GPU 加速不可用，回退到 CPU：', e);
+    handLandmarker = await HandLandmarker.createFromOptions(vision, opts('CPU'));
+  }
+}
+
+function showErr(msg) {
+  $('loadOverlay').classList.add('hidden');
+  $('errText').textContent = msg;
+  $('errOverlay').classList.remove('hidden');
+}
+
+async function start() {
+  $('startOverlay').classList.add('hidden');
+  $('loadOverlay').classList.remove('hidden');
+  try {
+    if (DEMO) {
+      // 彩排模式：不碰摄像头和模型，直接跑界面
+      camCv.width = 640; camCv.height = 360;
+      $('demoPill').classList.remove('hidden');
+      $('loadOverlay').classList.add('hidden');
+      loop();
+      return;
+    }
+    await initCamera();
+    await initModel();
+    $('loadOverlay').classList.add('hidden');
+    loop();
+  } catch (e) {
+    console.error(e);
+    showErr('请检查：① 是否允许了摄像头权限；② 是否通过 http:// 访问（不要直接双击文件打开）。\n'
+            + (e && e.message ? e.message : e));
+  }
+}
+
+$('startBtn').addEventListener('click', start);
+$('retryBtn').addEventListener('click', () => location.reload());
+
+/* 首屏先把题目和柱状图搭好，摄像头还没起来时界面也是完整的 */
+buildBars();
+renderQuestion();
+resetRound();
+
+if (DEMO) {
+  // 彩排模式不需要授权任何东西，直接进界面，省掉一次点击
+  start();
+}
+</script>
+</body>
+</html>

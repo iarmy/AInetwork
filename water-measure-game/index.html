@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1565c0">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>量水游戏</title>
+  <style>
+    /* 防止用户可以选中文本，避免影响触摸交互 */
+    html, body {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      overscroll-behavior: contain; /* 防止页面弹性滚动 */
+      touch-action: pan-x pan-y; /* 允许滚动但阻止缩放 */
+    }
+    /* 全局样式 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+    }
+    
+    body {
+      background: linear-gradient(135deg, #e0f7fa 0%, #b3e5fc 100%);
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #1565c0;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    
+    /* 游戏容器 */
+    .game-container {
+      background-color: rgba(255, 255, 255, 0.9);
+      border-radius: 15px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      padding: 25px;
+      margin-bottom: 30px;
+      backdrop-filter: blur(5px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .game-container:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* 关卡信息 */
+    #level-info {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 25px;
+      padding: 15px;
+      background: linear-gradient(to right, #bbdefb, #e3f2fd);
+      border-radius: 12px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+      border-left: 4px solid #1976d2;
+    }
+    
+    .optimal-solution {
+      font-size: 1.05rem;
+      color: #1565c0;
+      margin-top: 8px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+    }
+    
+    .optimal-solution::before {
+      content: '🏆';
+      margin-right: 8px;
+      font-size: 1.2rem;
+    }
+    
+    .level-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    
+    .level-indicator {
+      font-size: 1.3rem;
+      font-weight: bold;
+      color: #1565c0;
+      display: flex;
+      align-items: center;
+    }
+    
+    .level-indicator::before {
+      content: '⭐';
+      margin-right: 8px;
+      font-size: 1.2rem;
+    }
+    
+    #level-selector-btn {
+      background-color: #1565c0;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      padding: 8px 15px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+      box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
+    }
+    
+    #level-selector-btn:hover {
+      background-color: #0d47a1;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .goal {
+      font-size: 1.15rem;
+      color: #37474f;
+      line-height: 1.5;
+      margin-top: 5px;
+      font-weight: 500;
+    }
+    
+    /* 杯子容器 */
+    .cups-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start; /* 确保从顶部对齐 */
+      margin: 40px 0;
+      perspective: 1000px;
+      gap: 50px;
+    }
+    
+    /* 杯子样式 */
+    .cup {
+      width: 130px;
+      height: 200px;
+      border: 4px solid #2c3e50;
+      border-radius: 8px 8px 15px 15px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(240, 248, 255, 0.7));
+      box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), inset 0 0 15px rgba(255, 255, 255, 0.5);
+      transition: transform 0.3s;
+    }
+    
+    .cup:hover {
+      transform: rotateX(5deg) rotateY(5deg);
+    }
+    
+    .cup-label {
+      position: absolute;
+      top: -35px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-weight: bold;
+      font-size: 1.2rem;
+      color: #2c3e50;
+      text-shadow: 1px 1px 1px rgba(255, 255, 255, 0.8);
+      background-color: rgba(255, 255, 255, 0.7);
+      padding: 3px 10px;
+      border-radius: 15px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      white-space: nowrap;
+    }
+    
+    .water {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: linear-gradient(to bottom, #64b5f6, #2196f3);
+      transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 0 0 11px 11px;
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    
+    .water::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 200%;
+      height: 10px;
+      background-color: rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      transform: translateY(-5px);
+      animation: wave 2s infinite linear;
+    }
+    
+    .water::after {
+      content: '';
+      position: absolute;
+      top: 5px;
+      left: -50%;
+      width: 200%;
+      height: 10px;
+      background-color: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      transform: translateY(-5px);
+      animation: wave 3s infinite linear reverse;
+    }
+    
+    @keyframes wave {
+      0% { transform: translateX(-50%) translateY(-5px); }
+      50% { transform: translateX(0%) translateY(-2px); }
+      100% { transform: translateX(-50%) translateY(-5px); }
+    }
+    
+    /* 按钮样式 */
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+    
+    .buttons button {
+      padding: 14px;
+      background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.05rem;
+      font-weight: 600;
+      transition: all 0.3s;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .buttons button:hover {
+      background: linear-gradient(to bottom, #00c6fb 0%, #005bea 100%);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+    }
+    
+    .buttons button:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .buttons button::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 5px;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.5);
+      opacity: 0;
+      border-radius: 100%;
+      transform: scale(1, 1) translate(-50%);
+      transform-origin: 50% 50%;
+    }
+    
+    .buttons button:focus:not(:active)::after {
+      animation: ripple 1s ease-out;
+    }
+    
+    @keyframes ripple {
+      0% { transform: scale(0, 0); opacity: 1; }
+      20% { transform: scale(25, 25); opacity: 0.8; }
+      100% { opacity: 0; transform: scale(40, 40); }
+    }
+    
+    /* 控制按钮 */
+    .control-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 25px;
+      gap: 15px;
+    }
+    
+    .control-buttons button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      font-size: 1.05rem;
+      font-weight: 600;
+      transition: all 0.3s;
+      flex: 1;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2);
+    }
+    
+    .back {
+      background: linear-gradient(to right, #ff416c, #ff4b2b);
+      color: white;
+    }
+    
+    .back:hover {
+      background: linear-gradient(to right, #f83a5e, #e8432a);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 10px rgba(231, 76, 60, 0.3);
+    }
+    
+    .reset {
+      background: linear-gradient(to right, #f7b733, #fc4a1a);
+      color: white;
+    }
+    
+    .reset:hover {
+      background: linear-gradient(to right, #e8a929, #e8432a);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 10px rgba(243, 156, 18, 0.3);
+    }
+    
+    .hint {
+      background: linear-gradient(to right, #11998e, #38ef7d);
+      color: white;
+    }
+    
+    .hint:hover {
+      background: linear-gradient(to right, #0e8a7f, #32d56f);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 10px rgba(46, 204, 113, 0.3);
+    }
+    
+    .control-buttons button:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* 步骤记录 */
+    .steps {
+      background-color: #f8f9fa;
+      padding: 18px;
+      border-radius: 12px;
+      margin-top: 25px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+      border-left: 4px solid #3498db;
+    }
+    
+    .steps div {
+      margin-bottom: 12px;
+      font-weight: bold;
+      color: #2c3e50;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+    }
+    
+    .steps div::before {
+      content: '📃';
+      margin-right: 8px;
+      font-size: 1.2rem;
+    }
+    
+    #steps-list {
+      margin-left: 25px;
+      max-height: 180px;
+      overflow-y: auto;
+      padding-right: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: #3498db #f0f0f0;
+    }
+    
+    #steps-list::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    #steps-list::-webkit-scrollbar-track {
+      background: #f0f0f0;
+      border-radius: 10px;
+    }
+    
+    #steps-list::-webkit-scrollbar-thumb {
+      background-color: #3498db;
+      border-radius: 10px;
+    }
+    
+    #steps-list li {
+      margin-bottom: 8px;
+      padding: 6px 0;
+      border-bottom: 1px dashed #e0e0e0;
+      color: #546e7a;
+      transition: all 0.2s;
+    }
+    
+    #steps-list li:hover {
+      color: #1565c0;
+      transform: translateX(5px);
+    }
+    
+    /* 计时器 */
+    .timer {
+      margin: 15px auto;
+      font-weight: bold;
+      color: #2c3e50;
+      font-size: 1.1rem;
+      padding: 8px 15px;
+      background-color: rgba(255, 255, 255, 0.7);
+      border-radius: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: fit-content;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .timer::before {
+      content: '⏱';
+      margin-right: 8px;
+    }
+    
+    /* 模态框样式 */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(5px);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .modal.show {
+      opacity: 1;
+    }
+    
+    .modal-content {
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      width: 80%;
+      text-align: center;
+      transform: scale(0.9);
+      transition: transform 0.3s ease;
+    }
+    
+    .modal.show .modal-content {
+      transform: scale(1);
+    }
+    
+    .close-button {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      font-size: 28px;
+      cursor: pointer;
+      color: #455a64;
+      transition: all 0.2s;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 50%;
+      background-color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .close-button:hover {
+      color: #e74c3c;
+      transform: rotate(90deg);
+      background-color: rgba(255, 255, 255, 0.8);
+    }
+    
+    /* 关卡选择器 */
+    .level-selector-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid rgba(52, 152, 219, 0.3);
+      position: relative;
+    }
+    
+    .level-selector-header h2 {
+      color: #1565c0;
+      font-size: 1.8rem;
+      font-weight: 700;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    .level-selector-header::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 100px;
+      height: 2px;
+      background-color: #3498db;
+    }
+    
+    .level-selector-content {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 20px;
+    }
+    
+    .level-button {
+      border: 3px solid #ddd;
+      border-radius: 12px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      background: linear-gradient(to bottom, #ffffff, #f5f5f5);
+    }
+    
+    .level-button.unlocked {
+      border-color: #3498db;
+      background: linear-gradient(to bottom, #e1f5fe, #b3e5fc);
+    }
+    
+    .level-button.unlocked:hover {
+      transform: translateY(-5px) scale(1.05);
+      box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+    }
+    
+    .level-button.locked {
+      border-color: #bdc3c7;
+      background: linear-gradient(to bottom, #ecf0f1, #d6dbdf);
+      cursor: not-allowed;
+      opacity: 0.8;
+    }
+    
+    .level-button.completed {
+      border-color: #2ecc71;
+      background: linear-gradient(to bottom, #e0f2f1, #b2dfdb);
+    }
+    
+    .level-button.completed:hover {
+      transform: translateY(-5px) scale(1.05);
+      box-shadow: 0 10px 20px rgba(46, 204, 113, 0.3);
+    }
+    
+    .level-number {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #2c3e50;
+      text-align: center;
+      margin-bottom: 10px;
+      text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .level-info {
+      font-size: 0.95rem;
+      color: #455a64;
+      line-height: 1.4;
+    }
+    
+    .level-completed {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      color: #2ecc71;
+      font-size: 1.5rem;
+      background-color: rgba(255, 255, 255, 0.8);
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* 结果模态框 */
+    .result-header {
+      text-align: center;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid rgba(52, 152, 219, 0.3);
+      position: relative;
+    }
+    
+    .result-header h2 {
+      color: #2ecc71;
+      font-size: 2rem;
+      font-weight: 700;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+      margin-bottom: 5px;
+    }
+    
+    .result-header::before {
+      content: '🎉';
+      font-size: 2rem;
+      position: absolute;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    
+    .result-header::after {
+      content: '🎉';
+      font-size: 2rem;
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    
+    .result-content {
+      text-align: center;
+      padding: 10px;
+    }
+    
+    .result-content p {
+      margin-bottom: 20px;
+      font-size: 1.2rem;
+      color: #455a64;
+      line-height: 1.5;
+      padding: 10px;
+      background-color: rgba(255, 255, 255, 0.5);
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    }
+    
+    .result-content p span {
+      font-weight: bold;
+      color: #1565c0;
+      font-size: 1.3rem;
+    }
+    
+    .result-content button {
+      background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
+      color: white;
+      border: none;
+      border-radius: 30px;
+      padding: 12px 30px;
+      font-size: 1.2rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 20px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s;
+      text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2);
+    }
+    
+    .result-content button:hover {
+      background: linear-gradient(to right, #00c6fb 0%, #005bea 100%);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* 提示对话框 */
+    .hint-content {
+      margin: 25px 0;
+      padding: 15px;
+      background-color: rgba(255, 255, 255, 0.7);
+      border-radius: 12px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+      border-left: 4px solid #f39c12;
+    }
+    
+    .hint-content p {
+      font-size: 1.15rem;
+      color: #455a64;
+      line-height: 1.6;
+    }
+    
+    .hint-content p::before {
+      content: '💡';
+      margin-right: 10px;
+      font-size: 1.3rem;
+    }
+    
+    .hint-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 25px;
+      gap: 15px;
+    }
+    
+    .hint-buttons button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      font-size: 1.05rem;
+      font-weight: 600;
+      transition: all 0.3s;
+      flex: 1;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .hint-buttons button:first-child {
+      background: linear-gradient(to right, #ff416c, #ff4b2b);
+      color: white;
+    }
+    
+    .hint-buttons button:first-child:hover {
+      background: linear-gradient(to right, #f83a5e, #e8432a);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 10px rgba(231, 76, 60, 0.3);
+    }
+    
+    .hint-buttons button:last-child {
+      background: linear-gradient(to right, #11998e, #38ef7d);
+      color: white;
+    }
+    
+    .hint-buttons button:last-child:hover {
+      background: linear-gradient(to right, #0e8a7f, #32d56f);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 10px rgba(46, 204, 113, 0.3);
+    }
+    
+    /* 水动画效果 */
+    .water-drop {
+      position: absolute;
+      top: -20px;
+      width: 12px;
+      height: 12px;
+      background: radial-gradient(circle at 30% 30%, #64b5f6, #2196f3);
+      border-radius: 50%;
+      animation: drop 1.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+      box-shadow: 0 0 5px rgba(33, 150, 243, 0.5);
+      z-index: 100;
+    }
+    
+    @keyframes drop {
+      0% { transform: translateY(0) scale(1); opacity: 0.9; }
+      50% { transform: translateY(100px) scale(0.8); opacity: 0.8; }
+      100% { transform: translateY(200px) scale(0.5); opacity: 0; }
+    }
+    
+    .water-particle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background-color: #4fc3f7;
+      border-radius: 50%;
+      z-index: 10;
+      opacity: 0.8;
+    }
+    
+    .water-splash {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background-color: #81d4fa;
+      border-radius: 50%;
+      z-index: 10;
+      opacity: 0.7;
+    }
+    
+    @keyframes splash {
+      0% { transform: translate(0, 0) scale(1); opacity: 0.7; }
+      100% { transform: translate(var(--splash-x), var(--splash-y)) scale(0); opacity: 0; }
+    }
+    
+    /* 触摸控制优化 */
+    .cup, .buttons button, .control-buttons button {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent; /* 移除移动设备上的点击高亮 */
+      touch-action: manipulation; /* 优化触摸交互 */
+    }
+    
+    /* 增大点击区域 */
+    .buttons button, .control-buttons button {
+      min-height: 44px; /* 确保触摸目标足够大 */
+      padding: 12px 20px;
+    }
+    
+    /* 触摸反馈效果 */
+    .buttons button:active, .control-buttons button:active, .cup:active {
+      transform: scale(0.95);
+      transition: transform 0.1s;
+    }
+    
+    /* 杯子触摸菜单 */
+    .cup-menu {
+      position: absolute;
+      bottom: -80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      padding: 8px;
+      display: none;
+      z-index: 100;
+      width: 140px;
+    }
+    
+    .cup-menu.visible {
+      display: block;
+      animation: fadeInUp 0.3s forwards;
+    }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 10px);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+    }
+    
+    .cup-menu-option {
+      padding: 8px 12px;
+      text-align: center;
+      font-weight: 500;
+      color: #2c3e50;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+    }
+    
+    .cup-menu-option:last-child {
+      border-bottom: none;
+    }
+    
+    .cup-menu-option:active {
+      background-color: rgba(33, 150, 243, 0.1);
+    }
+    
+    /* 消除移动设备上的悬停效果延迟 */
+    @media (hover: hover) {
+      .buttons button:hover, .control-buttons button:hover {
+        transform: translateY(-3px);
+      }
+      
+      .cup:hover {
+        transform: rotateX(5deg) rotateY(5deg);
+      }
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+      body {
+        padding: 15px 10px;
+      }
+      
+      h1 {
+        font-size: 1.8rem;
+        margin-bottom: 15px;
+      }
+      
+      .game-container {
+        padding: 15px;
+      }
+      
+      .cups-container {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 60px;
+        margin: 40px 0;
+      }
+      
+      .cup {
+        margin-bottom: 20px;
+        width: 110px;
+        height: 170px;
+      }
+      
+      .buttons {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+      
+      .buttons button {
+        font-size: 0.95rem;
+        padding: 12px 15px;
+      }
+      
+      .control-buttons {
+        flex-direction: row;
+        gap: 10px;
+      }
+      
+      .modal-content {
+        width: 90%;
+        max-width: 400px;
+        padding: 15px;
+      }
+      
+      .level-selector-content {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+      
+      .level-button {
+        font-size: 1.2rem;
+        height: 60px;
+      }
+      
+      /* 改进模态框在移动设备上的表现 */
+      .modal {
+        align-items: flex-start;
+        padding-top: 50px;
+      }
+      
+      /* 优化触摸区域 */
+      .close-button {
+        width: 40px;
+        height: 40px;
+      }
+    }
+    
+    /* 小屏幕设备的额外调整 */
+    @media (max-width: 480px) {
+      body {
+        padding: 10px 5px;
+      }
+      
+      h1 {
+        font-size: 1.5rem;
+      }
+      
+      .game-container {
+        padding: 12px;
+      }
+      
+      #level-info {
+        padding: 10px;
+      }
+      
+      .timer {
+        font-size: 1rem;
+        padding: 6px 12px;
+        margin: 10px auto;
+      }
+      
+      .level-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      
+      .level-indicator {
+        font-size: 1.1rem;
+      }
+      
+      #level-selector-btn {
+        padding: 6px 12px;
+        font-size: 0.9rem;
+      }
+      
+      .goal {
+        font-size: 1rem;
+      }
+      
+      .optimal-solution {
+        font-size: 0.95rem;
+      }
+      
+      .cups-container {
+        flex-direction: row;
+        justify-content: center;
+        align-items: flex-start; /* 确保从顶部对齐 */
+        gap: 30px;
+        margin: 50px 0 30px 0; /* 增加上方的空间，留给标签 */
+      }
+      
+      .cup {
+        width: 100px;
+        height: 150px;
+        margin: 40px 0 0 0; /* 添加上边距，为标签留出空间 */
+      }
+      
+      .cup-label {
+        font-size: 1rem;
+        top: -30px;
+        width: auto;
+        white-space: nowrap;
+      }
+      
+      .buttons {
+        grid-template-columns: 1fr;
+      }
+      
+      .buttons button, .control-buttons button {
+        font-size: 0.9rem;
+        padding: 10px;
+      }
+      
+      .control-buttons {
+        flex-direction: column;
+      }
+      
+      .steps {
+        padding: 10px;
+      }
+      
+      #steps-list {
+        max-height: 150px;
+      }
+      
+      /* 优化模态框在小屏幕上的显示 */
+      .modal-content {
+        width: 95%;
+        padding: 12px;
+      }
+      
+      .result-header h2, .level-selector-header h2 {
+        font-size: 1.5rem;
+      }
+      
+      .result-content p {
+        font-size: 1rem;
+      }
+      
+      /* 固定底部按钮 */
+      .control-buttons {
+        position: sticky;
+        bottom: 10px;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 10px;
+        margin-top: 15px;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>量水游戏</h1>
+  
+  <div class="game-container">
+    <div id="level-info">
+      <div class="level-header">
+        <span class="level-indicator">关卡 <span id="current-level">1</span></span>
+        <button id="level-selector-btn">切换关卡</button>
+      </div>
+      <p class="goal" id="level-goal">目标：使用 5 升和 3 升的水杯，准确量出 4 升水</p>
+      <p class="optimal-solution">最优解：<span id="optimal-steps-display">6</span> 步</p>
+    </div>
+    
+    <div class="timer">
+      时间：<span id="timer">0:00</span>
+    </div>
+    
+    <div class="cups-container">
+      <div class="cup" id="cup-5">
+        <div class="cup-label"><span id="cup-5-value">0</span>/<span id="cup-5-max">5</span> 升</div>
+        <div class="water" id="cup-5-water" style="height: 0%"></div>
+      </div>
+      
+      <div class="cup" id="cup-3">
+        <div class="cup-label"><span id="cup-3-value">0</span>/<span id="cup-3-max">3</span> 升</div>
+        <div class="water" id="cup-3-water" style="height: 0%"></div>
+      </div>
+    </div>
+    
+    <div class="buttons">
+      <button id="btn-fill-5">装满大杯</button>
+      <button id="btn-fill-3">装满小杯</button>
+      <button id="btn-pour-5">倒空大杯</button>
+      <button id="btn-pour-3">倒空小杯</button>
+      <button id="btn-5to3">大杯倒入小杯</button>
+      <button id="btn-3to5">小杯倒入大杯</button>
+    </div>
+    
+    <div class="control-buttons">
+      <button id="btn-undo" class="back">后退一步</button>
+      <button id="btn-reset" class="reset">重新开始</button>
+      <button id="btn-hint" class="hint">提示</button>
+    </div>
+    
+    <div class="steps">
+      <div>步数：<span id="step-count">0</span></div>
+      <ol id="steps-list"></ol>
+    </div>
+  </div>
+  
+  <!-- 关卡选择模态框 -->
+  <div id="level-selector-modal" class="modal">
+    <div class="modal-content">
+      <div class="level-selector-header">
+        <h2>关卡选择</h2>
+        <span class="close-button" id="close-level-selector">&times;</span>
+      </div>
+      <div class="level-selector-content" id="level-selector-content">
+        <!-- 关卡按钮将通过JavaScript动态生成 -->
+      </div>
+    </div>
+  </div>
+  
+  <!-- 提示对话框 -->
+  <div id="hint-modal" class="modal">
+    <div class="modal-content">
+      <h3>提示</h3>
+      <div class="hint-content">
+        <p id="hint-text"></p>
+      </div>
+      <div class="hint-buttons">
+        <button id="close-hint-btn">关闭</button>
+        <button id="apply-hint-btn">应用提示</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 结果模态框 -->
+  <div id="result-modal" class="modal">
+    <div class="modal-content">
+      <div class="result-header">
+        <h2>恭喜！</h2>
+        <span class="close-button" id="close-result">&times;</span>
+      </div>
+      <div class="result-content">
+        <p>你成功完成了关卡 <span id="completed-level"></span>！</p>
+        <p>使用了 <span id="used-steps"></span> 步</p>
+        <p>最优解法为 <span id="optimal-steps"></span> 步</p>
+        <p>用时：<span id="used-time"></span></p>
+        <button id="next-level">下一关</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 音效 -->
+  <audio id="pourSound" src="https://assets.mixkit.co/sfx/preview/mixkit-water-pouring-from-a-bottle-2944.mp3" preload="auto"></audio>
+  <audio id="successSound" src="sounds/success.mp3" preload="auto"></audio>
+  
+  <!-- 游戏脚本 -->
+  <script src="fixed-game.js"></script>
+  <script>
+    // 添加触摸交互增强功能
+    document.addEventListener('DOMContentLoaded', function() {
+      // 获取杯子元素
+      const cup5 = document.getElementById('cup-5');
+      const cup3 = document.getElementById('cup-3');
+      
+      // 为杯子添加触摸菜单
+      setupCupTouchMenu(cup5, 5);
+      setupCupTouchMenu(cup3, 3);
+      
+      // 点击页面其他区域关闭所有菜单
+      document.addEventListener('click', function(e) {
+        const menus = document.querySelectorAll('.cup-menu');
+        menus.forEach(menu => {
+          if (!menu.contains(e.target) && !e.target.classList.contains('cup')) {
+            menu.classList.remove('visible');
+          }
+        });
+      });
+      
+      // 防止页面缩放
+      document.addEventListener('touchmove', function(e) {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      // 检测是否为移动设备
+      function isMobileDevice() {
+        return (typeof window.orientation !== 'undefined') || (navigator.userAgent.indexOf('IEMobile') !== -1);
+      }
+      
+      // 如果是移动设备，添加特定的类
+      if (isMobileDevice()) {
+        document.body.classList.add('mobile-device');
+      }
+    });
+    
+    // 设置杯子触摸菜单
+    function setupCupTouchMenu(cupElement, cupNumber) {
+      // 创建菜单
+      const menu = document.createElement('div');
+      menu.className = 'cup-menu';
+      menu.id = `cup-${cupNumber}-menu`;
+      
+      // 添加菜单选项
+      const fillOption = document.createElement('div');
+      fillOption.className = 'cup-menu-option';
+      fillOption.textContent = '装满';
+      fillOption.addEventListener('click', function() {
+        document.getElementById(`btn-fill-${cupNumber}`).click();
+        menu.classList.remove('visible');
+      });
+      
+      const emptyOption = document.createElement('div');
+      emptyOption.className = 'cup-menu-option';
+      emptyOption.textContent = '倒空';
+      emptyOption.addEventListener('click', function() {
+        document.getElementById(`btn-pour-${cupNumber}`).click();
+        menu.classList.remove('visible');
+      });
+      
+      const pourOption = document.createElement('div');
+      pourOption.className = 'cup-menu-option';
+      pourOption.textContent = '倒入另一个杯子';
+      pourOption.addEventListener('click', function() {
+        if (cupNumber === 5) {
+          document.getElementById('btn-5to3').click();
+        } else {
+          document.getElementById('btn-3to5').click();
+        }
+        menu.classList.remove('visible');
+      });
+      
+      // 添加选项到菜单
+      menu.appendChild(fillOption);
+      menu.appendChild(emptyOption);
+      menu.appendChild(pourOption);
+      
+      // 添加菜单到杯子
+      cupElement.appendChild(menu);
+      
+      // 点击杯子显示菜单
+      cupElement.addEventListener('click', function(e) {
+        // 阻止事件冒泡
+        e.stopPropagation();
+        
+        // 隐藏所有其他菜单
+        const menus = document.querySelectorAll('.cup-menu');
+        menus.forEach(m => {
+          if (m !== menu) {
+            m.classList.remove('visible');
+          }
+        });
+        
+        // 切换当前菜单
+        menu.classList.toggle('visible');
+      });
+    }
+  </script>
+</body>
+</html>
