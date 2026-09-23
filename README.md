@@ -45,6 +45,7 @@ AInetwork/
 ├── index.html                  # ★ 导航首页（重新设计过）
 ├── server.py                   # 本地静态服务器
 ├── 启动导航页.command            # 双击即启动
+├── GitHub-Pages-部署指南.md      # 部署到 GitHub Pages + 自有域名的教程
 ├── previews/                   # 首页 9 张卡片的站点截图
 ├── tools/
 │   ├── verify.sh               # 一键自检（逻辑 + 断链 + HTTP + 运行时）
