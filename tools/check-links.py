@@ -39,6 +39,15 @@ KNOWN_MISSING = {
     "grand_canal_project/images/cc.jpg",
 }
 
+# 由自带服务端路由的子项目：页面里的 "/setup"、"/style.css" 是服务端路由路径，
+# 不对应仓库里的静态文件，静态扫描无法判断，故跳过以 "/" 开头的引用。
+# qidian/ 是独立的 Node 应用（qidian/ 下 npm run dev），资源由 server/worker.mjs 与
+# scripts/dev.mjs 路由；相对路径引用仍然照常检查。
+SERVER_ROUTED_DIRS = {"qidian"}
+
+# 扫描过程中被跳过的服务端路由引用，最后汇总打印（避免"以为检查过了"）
+skipped_server_routes = []
+
 
 def is_local(ref: str) -> bool:
     ref = ref.strip()
@@ -66,8 +75,14 @@ def check_file(path: str):
     """返回该文件里的断链列表 [(引用, 行号, 解析后的绝对路径)]。"""
     broken = []
     base = os.path.dirname(path)
+    top_dir = os.path.relpath(path, ROOT).split(os.sep)[0]
+    server_routed = top_dir in SERVER_ROUTED_DIRS
     for ref, lineno in refs_in(path):
         clean = ref.split("?")[0].split("#")[0].strip()
+        if server_routed and clean.startswith("/"):
+            # 服务端路由路径，仓库里没有对应文件，交给该子项目自己测
+            skipped_server_routes.append((os.path.relpath(path, ROOT), ref.strip()))
+            continue
         if not clean or clean.endswith("/"):
             # 指向目录：只要目录存在就算通过
             target = os.path.normpath(os.path.join(base, unquote(clean or ".")))
@@ -100,6 +115,7 @@ def main() -> int:
     total_files = 0
     total_refs = 0
     problems = 0
+    skipped_server_routes.clear()
 
     for path in sorted(iter_sources()):
         total_files += 1
@@ -117,6 +133,10 @@ def main() -> int:
 
     print("\n" + "=" * 58)
     print(f"  扫描文件 {total_files} 个 · 本地引用 {total_refs} 处 · 断链 {problems} 处")
+    if skipped_server_routes:
+        dirs = sorted({p.split(os.sep)[0] for p, _ in skipped_server_routes})
+        print(f"  另有 {len(skipped_server_routes)} 处服务端路由引用（{'/'.join(dirs)}/）已跳过，"
+              f"由该子项目自己的测试覆盖")
     print("=" * 58)
     return 1 if problems else 0
 

@@ -4,7 +4,7 @@
 
 ## 一、站点清单
 
-首页按三类组织，共 **9 张站点卡片**（另有 1 个同目录子站点直通入口，合计 10 个页面入口）：
+首页按三类组织，共 **10 张站点卡片**（另有 1 个同目录子站点直通入口，合计 11 个页面入口）：
 
 ### 手势互动（需要摄像头）
 
@@ -27,6 +27,7 @@
 | 课堂点名系统 | `dianming/index.html` | 随机/顺序点名、考勤记录、CSV 名单导入与考勤导出 |
 | 10 以内加减法小游戏 | `math_game/math_game.html` | 限时口算练习 |
 | 量水游戏 | `water-measure-game/index.html` | 倒水量杯闯关，训练逻辑推理 |
+| 启点 · DeepSeek 学习诊所 | `http://127.0.0.1:5188` | 拍题识题 + 启发式追问辅导 + 一元一次方程本地诊断与错题本。**自带 Node 服务端，不是纯静态页**：先在 `qidian/` 里 `npm run dev` 再访问；DeepSeek Key 存本机 `qidian/.env`，不入库 |
 
 ### 学科演示
 
@@ -46,7 +47,7 @@ AInetwork/
 ├── server.py                   # 本地静态服务器
 ├── 启动导航页.command            # 双击即启动
 ├── GitHub-Pages-部署指南.md      # 部署到 GitHub Pages + 自有域名的教程
-├── previews/                   # 首页 9 张卡片的站点截图
+├── previews/                   # 首页 10 张卡片的站点截图
 ├── tools/
 │   ├── verify.sh               # 一键自检（逻辑 + 断链 + HTTP + 运行时）
 │   ├── test-logic.js           # 首页筛选 / 出题算法 的逻辑测试（node，无需浏览器）
@@ -61,6 +62,7 @@ AInetwork/
 ├── grand_canal_project/        # 大运河数字展厅
 ├── long-march/                 # 红军长征路线图
 ├── math_game/                  # 10 以内加减法
+├── qidian/                     # 启点 · DeepSeek 学习诊所（自带 Node 服务，见 README）
 ├── solar-system-3d/            # 太阳系三维
 └── water-measure-game/         # 量水游戏
 ```

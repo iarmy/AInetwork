@@ -395,6 +395,9 @@ body {
   background: var(--brand); color: #fff; border-color: var(--brand);
   transform: translateY(-1px);
 }
+/* 子站点区里放纯文字提示时用（例如"需先在本机起服务"） */
+.sublinks .hint { font-size: .8rem; color: var(--ink-3); line-height: 1.65; }
+.sublinks .hint b { color: var(--ink-2); font-weight: 600; }
 
 /* 空状态 */
 .empty {
@@ -472,9 +475,9 @@ footer code {
       手势类站点请先在浏览器中允许摄像头权限。
     </p>
     <div class="stats">
-      <div class="stat"><b>9</b><span>独立站点</span></div>
-      <div class="stat"><b>10</b><span>个页面入口</span></div>
-      <div class="stat"><b>3</b><span>个依赖网络</span></div>
+      <div class="stat"><b>10</b><span>独立站点</span></div>
+      <div class="stat"><b>11</b><span>个页面入口</span></div>
+      <div class="stat"><b>4</b><span>个依赖网络</span></div>
     </div>
   </div>
 </header>
@@ -489,12 +492,12 @@ footer code {
       <kbd>/</kbd>
     </div>
     <div class="chips" role="group" aria-label="按分类筛选">
-      <button class="chip" data-cat="all" aria-pressed="true">全部<span class="n">9</span></button>
+      <button class="chip" data-cat="all" aria-pressed="true">全部<span class="n">10</span></button>
       <button class="chip" data-cat="gesture" aria-pressed="false">手势互动<span class="n">3</span></button>
-      <button class="chip" data-cat="class" aria-pressed="false">课堂工具<span class="n">3</span></button>
+      <button class="chip" data-cat="class" aria-pressed="false">课堂工具<span class="n">4</span></button>
       <button class="chip" data-cat="subject" aria-pressed="false">学科演示<span class="n">3</span></button>
     </div>
-    <span class="count" id="count">共 9 个站点</span>
+    <span class="count" id="count">共 10 个站点</span>
   </div>
 
   <!-- main 不再单独包一层 .wrap：工具条要和正文共享同一个长容器，
@@ -618,7 +621,7 @@ footer code {
         <h2>课堂工具</h2>
         <p>课堂上随手就能用的互动小工具</p>
       </div>
-      <span class="num">3 个站点</span>
+      <span class="num">4 个站点</span>
     </div>
 
     <div class="cards">
@@ -700,6 +703,44 @@ footer code {
             <span class="tag">关卡闯关</span>
             <span class="tag">数学思维</span>
             <span class="tag">含音效</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 启点 · DeepSeek 学习诊所：自带 Node 服务端，不是纯静态页，
+           卡片直连本机 http://127.0.0.1:5188，见卡片说明。 -->
+      <article class="card" data-cat="class"
+               data-keywords="启点 qidian AI 学习 诊所 错题 拍题 识题 照片 辅导 答疑 deepseek 学习助手 一元一次 方程 错题本 追问 讲解">
+        <div class="cover"
+           style="--cover:linear-gradient(135deg,#5b4ae8,#8b5cf6)">
+          <span class="glyph" aria-hidden="true">✳</span>
+          <img src="previews/qidian.png" alt="" loading="lazy" onerror="this.hidden=true">
+          <span class="scrim" aria-hidden="true"></span>
+          <span class="kind">需本机服务</span>
+          <span class="go" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+          </span>
+        </div>
+        <div class="body">
+          <h3><a href="http://127.0.0.1:5188">启点 · DeepSeek 学习诊所</a></h3>
+          <p class="desc">
+            拍下错题照片，AI 识别题干后由你核对确认，再带着原图做启发式追问辅导；
+            另含一元一次方程的本地诊断与本机错题本。
+          </p>
+          <div class="tags">
+            <span class="tag net">需联网 + 本机服务</span>
+            <span class="tag">DeepSeek 识题辅导</span>
+            <span class="tag local">错题本本地保存</span>
+          </div>
+
+          <div class="sublinks">
+            <div class="lbl">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10"/><path d="M4 12h16"/><path d="M4 18h7"/></svg>
+              怎么打开
+            </div>
+            <div class="row">
+              <span class="hint">先在本机 <b>qidian/</b> 目录运行 <b>npm run dev</b>，再点上面标题进入；纯静态托管时只有本地方程练习可用。</span>
+            </div>
           </div>
         </div>
       </article>

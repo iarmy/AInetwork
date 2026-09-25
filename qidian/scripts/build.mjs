@@ -1,0 +1,4 @@
+import {readFile,writeFile,mkdir,readdir} from 'node:fs/promises';
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'};const assets={};
+for(const name of await readdir(new URL('../public/',import.meta.url))){const ext=name.slice(name.lastIndexOf('.'));if(!types[ext])continue;assets['/'+name]={body:await readFile(new URL('../public/'+name,import.meta.url),'utf8'),type:types[ext]};}
+const worker=await readFile(new URL('../server/worker.mjs',import.meta.url),'utf8');await mkdir(new URL('../dist/server/',import.meta.url),{recursive:true});await writeFile(new URL('../dist/server/index.js',import.meta.url),worker+'\nconst bundledAssets='+JSON.stringify(assets)+';\nexport default {fetch:createHandler({assets:bundledAssets})};\n');console.log('Built worker with '+Object.keys(assets).length+' bundled assets.');

@@ -71,9 +71,15 @@ function testPortalFilter() {
     return card;
   });
 
-  const groupNames = [...html.matchAll(/data-group="([^"]+)"/g)].map(m => m[1]);
-  const groups = groupNames.map((name, i) => {
-    const g = { hidden: false, name, cards: cards.slice(i * 3, i * 3 + 3) };
+  // 每个分组的卡片数从真实的 <section class="group" data-group="..."> 块里数出来。
+  // 不能写死每组 3 张：2026-09 起「课堂工具」有 4 张（新增「启点 · DeepSeek 学习诊所」）。
+  const sectionBlocks = [...html.matchAll(
+    /<section class="group"[^>]*data-group="([^"]+)"[\s\S]*?(?=<section class="group"|<\/main>)/g)];
+  let cursor = 0;
+  const groups = sectionBlocks.map(m => {
+    const size = [...m[0].matchAll(/<article class="card"/g)].length;
+    const g = { hidden: false, name: m[1], cards: cards.slice(cursor, cursor + size) };
+    cursor += size;
     g.querySelectorAll = () => g.cards.filter(c => !c.hidden);
     return g;
   });
@@ -110,17 +116,18 @@ function testPortalFilter() {
   const expect = (label, got, want) =>
     got === want ? ok(label, `得到 ${got}`) : bad(label, `期望 ${want}，实际 ${got}`);
 
-  expect('初始显示全部 9 张卡片', visible(), 9);
-  expect('初始计数文案', countEl.textContent, '共 9 个站点');
+  expect('初始显示全部 10 张卡片', visible(), 10);
+  expect('初始计数文案', countEl.textContent, '共 10 个站点');
 
   click('gesture'); expect('筛选「手势互动」', visible(), 3);
-  click('class');   expect('筛选「课堂工具」', visible(), 3);
+  click('class');   expect('筛选「课堂工具」', visible(), 4);
   click('subject'); expect('筛选「学科演示」', visible(), 3);
-  click('all');     expect('回到「全部」', visible(), 9);
+  click('all');     expect('回到「全部」', visible(), 10);
 
   search('数独');   expect('搜索「数独」', visible(), 1);
   search('量水');   expect('搜索「量水」', visible(), 1);
   search('摄像头'); expect('搜索「摄像头」命中标签', visible(), 3);
+  search('错题');   expect('搜索「错题」命中新增的启点卡片', visible(), 1);
   search('zzz不存在'); expect('搜索无结果', visible(), 0);
   expect('无结果时显示空状态', emptyEl.classList.contains('show'), true);
 
@@ -129,7 +136,7 @@ function testPortalFilter() {
   expect('仅保留命中的分组标题', groups.filter(g => !g.hidden).length, 1);
 
   search(''); click('all');
-  expect('清空后恢复全部', visible(), 9);
+  expect('清空后恢复全部', visible(), 10);
 }
 
 /* ============================================================
