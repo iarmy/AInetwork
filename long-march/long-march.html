@@ -671,7 +671,9 @@
                 
                 <div class="audio-controls">
                     <div class="audio-title">背景音乐: 《红星照我去战斗》</div>
-                    <audio id="background-music" src="龚玥-红星照我去战斗.mp3" preload="auto" loop></audio>
+                    <audio id="background-music" preload="auto" loop>
+                        <source src="龚玥-红星照我去战斗.m4a" type="audio/mp4">
+                    </audio>
                     <div class="volume-control">
                         <label for="volume">音量:</label>
                         <input type="range" id="volume" min="0" max="1" step="0.1" value="0.5">
@@ -1489,14 +1491,50 @@
         musicBtn.addEventListener('click', toggleMusic);
         volumeControl.addEventListener('input', adjustVolume);
         
-        // 预先加载全部城市照片，保证演示过程中切换影像不卡顿
-        function preloadPhotos() {
-            routePoints.forEach(point => {
-                const img = new Image();
-                img.src = point.photo;
-            });
+        // 网速慢时音乐需要缓冲，在按钮上给出提示，避免"点了没声音"
+        backgroundMusic.addEventListener('waiting', () => {
+            if (isMusicPlaying) musicBtn.textContent = '缓冲中…';
+        });
+        backgroundMusic.addEventListener('playing', () => {
+            if (isMusicPlaying) musicBtn.textContent = '暂停音乐';
+        });
+        backgroundMusic.addEventListener('error', () => {
+            console.warn('背景音乐加载失败');
+            pauseMusic();
+        });
+        
+        // 音乐是否已经攒够缓冲（够再放 20 秒）。
+        // 网速慢时优先保证音乐不断流，照片预加载主动让路。
+        function musicBufferHealthy() {
+            if (!isMusicPlaying) return true;
+            const buffered = backgroundMusic.buffered;
+            if (!buffered || !buffered.length) return false;
+            const ahead = buffered.end(buffered.length - 1) - backgroundMusic.currentTime;
+            return ahead >= 20;
         }
-        window.addEventListener('load', preloadPhotos);
+        
+        // 预先加载全部城市照片，保证演示时切换影像不卡顿。
+        // 逐张串行下载（而不是 11 张同时并发），并且音乐缓冲不足时暂停让路
+        function preloadPhotos() {
+            const queue = routePoints.map(point => point.photo);
+            let index = 0;
+            const loadNext = () => {
+                if (index >= queue.length) return;
+                if (!musicBufferHealthy()) {
+                    setTimeout(loadNext, 1000);
+                    return;
+                }
+                const img = new Image();
+                img.onload = img.onerror = () => {
+                    index += 1;
+                    loadNext();
+                };
+                img.src = queue[index];
+            };
+            loadNext();
+        }
+        // 延后一点再预加载，先把首屏图片和音乐的开头让出来
+        window.addEventListener('load', () => setTimeout(preloadPhotos, 1500));
         
         // 初始化
         buildPhotoStrip();

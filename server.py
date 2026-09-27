@@ -42,6 +42,8 @@ EXTRA_TYPES = {
     ".css": "text/css",
     ".svg": "image/svg+xml",
     ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
     ".mp4": "video/mp4",
     ".woff2": "font/woff2",
     ".csv": "text/csv; charset=utf-8",
