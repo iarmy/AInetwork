@@ -53,32 +53,54 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         
-        .content-wrapper {
+        /* ---------- 顶部工具条 ---------- */
+        .toolbar {
             display: flex;
-            gap: 30px;
-            align-items: flex-start;
-        }
-        
-        .left-column {
-            flex: 7;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 18px;
+            padding: 16px 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
         }
         
-        .animation-section {
+        .toolbar .button-group {
+            margin-bottom: 0;
+        }
+        
+        .toolbar .progress-bar {
+            flex: 1 1 180px;
+            min-width: 120px;
+            margin-bottom: 0;
+        }
+        
+        .toolbar .audio-controls {
+            flex: 0 1 auto;
+            margin: 0;
+            padding: 8px 14px;
+            background-color: white;
+        }
+        
+        /* ---------- 主舞台：左动画 + 右历史影像 ---------- */
+        .stage {
+            display: flex;
+            gap: 24px;
+            align-items: stretch;
+        }
+        
+        .stage-map {
+            flex: 1 1 55%;
+            /* flex 项默认 min-width:auto，会被内部元素固有宽度撑爆，必须归零 */
+            min-width: 0;
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            flex: 7;
+            gap: 10px;
         }
         
         #map-container {
-            width: 90%;
-            margin: 0 auto;
-            height: 600px;
-            height: 540px;
+            width: 100%;
+            /* 与右侧历史影像面板高度大致齐平 */
+            height: 620px;
             border: 2px solid #ddd;
             border-radius: 8px;
             overflow: hidden;
@@ -90,11 +112,32 @@
             background-color: #f9f9f9;
         }
         
-        .controls {
+        /* ---------- 下排：重要事件 + 诗词/统计 ---------- */
+        .bottom-row {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+        
+        .timeline-panel {
+            flex: 1 1 46%;
+            min-width: 0;
             padding: 20px;
             background-color: #f8f9fa;
             border-radius: 8px;
-            flex: 3;
+        }
+        
+        .info-column {
+            flex: 1 1 54%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        /* DOM 中「重要事件」排在诗词之后，用 order 让它显示在左栏 */
+        .bottom-row .timeline-panel {
+            order: -1;
         }
         
         .timeline-section {
@@ -332,6 +375,278 @@
             background: #c41e3a;
             cursor: pointer;
         }
+        
+        /* ---------- 途经城市历史影像 ---------- */
+        .photo-section {
+            /* 作为 .stage 的右栏：与左侧动画地图并排 */
+            flex: 1 1 45%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .photo-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 14px 18px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .photo-header h3 {
+            font-size: 1.15rem;
+            color: #c41e3a;
+        }
+        
+        .photo-header .hint {
+            font-size: 0.78rem;
+            color: #999;
+        }
+        
+        .photo-stage {
+            position: relative;
+            background-color: #1a1a1a;
+            min-height: 260px;
+        }
+        
+        #photo-img {
+            display: block;
+            width: 100%;
+            /* 图片按 16:9 自适应右栏宽度，与左侧地图高度接近 */
+            aspect-ratio: 16 / 9;
+            height: auto;
+            object-fit: cover;
+            background-color: #1a1a1a;
+            opacity: 1;
+            transition: opacity 0.35s ease-in-out;
+            cursor: zoom-in;
+        }
+        
+        #photo-img.is-fading {
+            opacity: 0;
+        }
+        
+        .photo-overlay {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 46px 18px 14px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.45) 55%, rgba(0, 0, 0, 0) 100%);
+            color: white;
+            pointer-events: none;
+        }
+        
+        .photo-city {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        
+        .photo-city-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        
+        .photo-city-date {
+            font-size: 0.85rem;
+            padding: 2px 10px;
+            border-radius: 10px;
+            background-color: rgba(196, 30, 58, 0.9);
+        }
+        
+        .photo-title {
+            font-size: 0.95rem;
+            opacity: 0.95;
+            line-height: 1.5;
+        }
+        
+        .photo-credit a {
+            color: #ffffff;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        
+        .photo-credit a:hover {
+            color: #ffd9df;
+        }
+        
+        .photo-source-note {
+            padding: 0 18px 12px;
+            font-size: 0.72rem;
+            color: #aaa;
+            line-height: 1.6;
+        }
+        
+        .photo-credit {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            max-width: 74%;
+            font-size: 0.68rem;
+            color: rgba(255, 255, 255, 0.85);
+            background-color: rgba(0, 0, 0, 0.45);
+            padding: 3px 9px;
+            border-radius: 10px;
+            text-align: right;
+            line-height: 1.4;
+        }
+        
+        .photo-desc {
+            padding: 14px 18px 4px;
+            font-size: 0.88rem;
+            color: #555;
+            line-height: 1.7;
+        }
+        
+        .photo-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 12px 14px 16px;
+        }
+        
+        .photo-chip {
+            flex: 1 1 78px;
+            min-width: 0;
+            max-width: 110px;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            background-color: #f8f9fa;
+            overflow: hidden;
+            cursor: pointer;
+            padding: 0;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+        
+        .photo-chip:hover {
+            transform: translateY(-2px);
+        }
+        
+        .photo-chip.active {
+            border-color: #c41e3a;
+        }
+        
+        .photo-chip img {
+            display: block;
+            width: 100%;
+            height: 48px;
+            object-fit: cover;
+            background-color: #eee;
+        }
+        
+        .photo-chip .chip-label {
+            display: block;
+            padding: 3px 0 4px;
+            font-size: 0.74rem;
+            color: #555;
+            text-align: center;
+        }
+        
+        .photo-chip.active .chip-label {
+            color: #c41e3a;
+            font-weight: bold;
+        }
+        
+        /* 图片放大预览 */
+        .photo-lightbox {
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            background-color: rgba(0, 0, 0, 0.88);
+        }
+        
+        .photo-lightbox.open {
+            display: flex;
+        }
+        
+        .photo-lightbox img {
+            max-width: 92vw;
+            max-height: 82vh;
+            border-radius: 6px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+        }
+        
+        .photo-lightbox .lightbox-caption {
+            position: absolute;
+            bottom: 22px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: #eee;
+            font-size: 0.85rem;
+            padding: 0 20px;
+        }
+        
+        .photo-lightbox .lightbox-close {
+            position: absolute;
+            top: 16px;
+            right: 22px;
+            font-size: 1.8rem;
+            line-height: 1;
+            color: white;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 10px;
+        }
+        
+        .map-tip {
+            font-size: 0.78rem;
+            color: #999;
+            text-align: center;
+        }
+        
+        @media (max-width: 1000px) {
+            /* 窄屏：动画、影像、重要事件、诗词统计依次纵向堆叠 */
+            .stage,
+            .bottom-row {
+                flex-direction: column;
+            }
+            
+            .stage-map,
+            .photo-section,
+            .timeline-panel,
+            .info-column {
+                flex: 1 1 auto;
+                width: 100%;
+            }
+            
+            #map-container {
+                height: 420px;
+            }
+            
+            .toolbar {
+                gap: 12px;
+            }
+            
+            .toolbar .audio-controls {
+                flex: 1 1 100%;
+            }
+        }
+        
+        @media (max-width: 560px) {
+            .photo-chip {
+                flex: 1 1 62px;
+                max-width: 80px;
+            }
+            
+            .photo-chip img {
+                height: 40px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -342,12 +657,66 @@
         </header>
         
         <div class="main-content">
-            <div class="content-wrapper">
-                <div class="left-column">
+            <!-- 顶部工具条：演示控制 + 进度 + 背景音乐（始终可见） -->
+            <div class="toolbar">
+                <div class="button-group">
+                    <button id="start-btn">开始演示</button>
+                    <button id="reset-btn">重置</button>
+                    <button id="music-btn">播放音乐</button>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress" id="progress"></div>
+                </div>
+                
+                <div class="audio-controls">
+                    <div class="audio-title">背景音乐: 《红星照我去战斗》</div>
+                    <audio id="background-music" src="龚玥-红星照我去战斗.mp3" preload="auto" loop></audio>
+                    <div class="volume-control">
+                        <label for="volume">音量:</label>
+                        <input type="range" id="volume" min="0" max="1" step="0.1" value="0.5">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 主舞台：左侧动画地图 + 右侧历史影像 -->
+            <div class="stage">
+                <div class="stage-map">
                     <div id="map-container">
                         <canvas id="map-canvas"></canvas>
                     </div>
                     
+                    <div class="map-tip">提示：点击地图上的城市圆点，可直接查看该地的历史影像</div>
+                </div>
+                
+                <div class="photo-section" id="photo-section">
+                        <div class="photo-header">
+                            <h3>途经城市 · 历史影像</h3>
+                            <span class="hint">随演示自动切换，可点击缩略图浏览</span>
+                        </div>
+                        <div class="photo-stage">
+                            <img id="photo-img" src="images/ruijin.jpg" alt="瑞金 · 长征出发地历史影像">
+                            <div class="photo-credit" id="photo-credit"></div>
+                            <div class="photo-overlay">
+                                <div class="photo-city">
+                                    <span class="photo-city-name" id="photo-city-name">瑞金</span>
+                                    <span class="photo-city-date" id="photo-city-date">1934年10月</span>
+                                </div>
+                                <div class="photo-title" id="photo-title"></div>
+                            </div>
+                        </div>
+                        <div class="photo-desc" id="photo-desc"></div>
+                        <div class="photo-strip" id="photo-strip"></div>
+                        <div class="photo-source-note">
+                            图片均取自 Wikimedia Commons 的公有领域（PD）或知识共享（CC0 / CC BY / CC BY-SA）授权作品，
+                            仅用于教学演示，点击大图可查看原图。图片来源与作者已在图片右上角标注。
+                        </div>
+                    </div>
+            </div>
+            
+            <!-- 下排：重要事件（左） + 诗词 / 统计（右） -->
+            <div class="bottom-row">
+                <div class="info-column">
                     <div class="poetry-section">
                         <div class="poetry-title">《七律·长征》</div>
                         <div class="poetry-info">
@@ -392,28 +761,8 @@
                     </div>
                 </div>
                 
-                <div class="controls">
-                    <div class="button-group">
-                        <button id="start-btn">开始演示</button>
-                        <button id="reset-btn">重置</button>
-                        <button id="music-btn">播放音乐</button>
-                    </div>
-                    
-                    <div class="progress-bar">
-                        <div class="progress" id="progress"></div>
-                    </div>
-                    
-                    <div class="audio-controls">
-                        <div class="audio-title">背景音乐: 《红星照我去战斗》</div>
-                        <audio id="background-music" src="龚玥-红星照我去战斗.mp3" preload="auto" loop></audio>
-                        <div class="volume-control">
-                            <label for="volume">音量:</label>
-                            <input type="range" id="volume" min="0" max="1" step="0.1" value="0.5">
-                        </div>
-                    </div>
-                    
-                    <div class="timeline">
-                        <h3>重要事件</h3>
+                <div class="timeline-panel">
+                    <h3>重要事件</h3>
                         <div class="timeline">
                             <div class="event" data-date="1934-10">
                                 <div class="event-date">1934年10月</div>
@@ -474,12 +823,17 @@
                         </div>
                     </div>
                 </div>
-            </div>
         </div>
         
         <footer>
             <p>© 2025 红军长征路线图演示 | 致敬革命先烈</p>
         </footer>
+    </div>
+    
+    <div class="photo-lightbox" id="photo-lightbox" role="dialog" aria-modal="true" aria-label="图片放大预览">
+        <button class="lightbox-close" type="button" aria-label="关闭">&times;</button>
+        <img id="lightbox-img" src="" alt="">
+        <div class="lightbox-caption" id="lightbox-caption"></div>
     </div>
     
     <script>
@@ -504,21 +858,92 @@
         
         // 初始化时调整画布尺寸
         resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
+        // 注意：修改 canvas.width/height 会清空画布，所以窗口尺寸变化后必须重绘
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            redraw();
+        });
         
         // 定义路线点，进一步拉长路线
+        // photo / thumb：本地历史影像，desc 为讲解文字，credit 为来源署名（Wikimedia Commons）
         const routePoints = [
-            { name: "瑞金", x: 0.90, y: 0.80, date: "1934-10" },
-            { name: "于都", x: 0.85, y: 0.75, date: "1934-10" },
-            { name: "南雄", x: 0.80, y: 0.70, date: "1934-11" },
-            { name: "通道", x: 0.70, y: 0.65, date: "1934-12" },
-            { name: "遵义", x: 0.60, y: 0.60, date: "1935-01" },
-            { name: "娄山关", x: 0.50, y: 0.50, date: "1935-02" },
-            { name: "四渡赤水", x: 0.40, y: 0.45, date: "1935-03" },
-            { name: "昭通", x: 0.30, y: 0.40, date: "1935-04" },
-            { name: "泸定桥", x: 0.20, y: 0.35, date: "1935-05" },
-            { name: "夹金山", x: 0.15, y: 0.30, date: "1935-06" },
-            { name: "延安", x: 0.10, y: 0.20, date: "1935-10" }
+            {
+                name: "瑞金", x: 0.90, y: 0.80, date: "1934-10",
+                photo: "images/ruijin.jpg", thumb: "images/thumbs/ruijin.jpg",
+                title: "瑞金叶坪革命旧址群——中央苏区的红色首都",
+                desc: "1931年11月，中华苏维埃共和国临时中央政府在瑞金成立，瑞金成为中央苏区的心脏。1934年10月，中央红军主力8.6万余人由此出发开始战略转移，中央机关从云石山踏上征途，后人称云石山为“长征第一山”。",
+                credit: '摄影 Zhangzhugang · <a href="https://commons.wikimedia.org/wiki/File:Ruijin_Yeping_2018.10.06_11-24-21.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY-SA 4.0'
+            },
+            {
+                name: "于都", x: 0.85, y: 0.75, date: "1934-10",
+                photo: "images/yudu.jpg", thumb: "images/thumbs/yudu.jpg",
+                title: "中央红军长征第一渡口（于都东门渡口）",
+                desc: "1934年10月17日至20日夜间，中央红军主力从于都县城东门等8个渡口渡过于都河。当地群众拆下门板、床板架设浮桥，送别红军，于都因此被称为“长征出发地”。",
+                credit: '摄影 Zhangzhugang · <a href="https://commons.wikimedia.org/wiki/File:Yudu_Zhongyang_Hongjun_Changzheng_Diyi_Dukou_2014.05.30_11-05-59.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY-SA 3.0'
+            },
+            {
+                name: "南雄", x: 0.80, y: 0.70, date: "1934-11",
+                photo: "images/nanxiong.jpg", thumb: "images/thumbs/nanxiong.jpg",
+                title: "南雄梅关古道",
+                desc: "1934年10月下旬至11月，红一方面军长征途经广东南雄一带，在梅岭、油山等山区与国民党军周旋、短暂休整。南雄是红军长征进入广东境内的重要一站，梅关古道自此留下了红军的足迹。",
+                credit: '摄影 Zhangzhugang · <a href="https://commons.wikimedia.org/wiki/File:Mei_Guan_2014.01.12_13-57-42.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY-SA 3.0'
+            },
+            {
+                name: "通道", x: 0.70, y: 0.65, date: "1934-12",
+                photo: "images/tongdao.jpg", thumb: "images/thumbs/tongdao.jpg",
+                title: "通道县溪镇（“通道转兵”之地）",
+                desc: "1934年12月，中央红军占领湖南通道县溪镇，在此召开紧急会议，采纳毛泽东的建议，放弃北上湘西的原定计划，改向敌人力量薄弱的贵州前进，史称“通道转兵”，为遵义会议的召开创造了条件。",
+                credit: '摄影 Sufangxi · <a href="https://commons.wikimedia.org/wiki/File:Qu_River_(Yuan_River_tributary)_%EF%BC%8CTongdao%EF%BC%8CHunan_province.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC0'
+            },
+            {
+                name: "遵义", x: 0.60, y: 0.60, date: "1935-01",
+                photo: "images/zunyi.jpg", thumb: "images/thumbs/zunyi.jpg",
+                title: "遵义会议会址",
+                desc: "1935年1月15日至17日，中共中央政治局扩大会议在遵义召开，实际确立了毛泽东在党中央和红军中的领导地位。这次会议在极端危急的历史关头挽救了党、挽救了红军，是党的历史上一个生死攸关的转折点。",
+                credit: '摄影 xiquinhosilva · <a href="https://commons.wikimedia.org/wiki/File:Zunyi_Conference_Site.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY 4.0'
+            },
+            {
+                name: "娄山关", x: 0.50, y: 0.50, date: "1935-02",
+                photo: "images/loushanguan.jpg", thumb: "images/thumbs/loushanguan.jpg",
+                title: "娄山关红军战斗遗址",
+                desc: "1935年2月，红军二渡赤水后回师黔北，攻克天险娄山关，取得长征以来最大的一次胜利。毛泽东在此写下《忆秦娥·娄山关》：“雄关漫道真如铁，而今迈步从头越。”",
+                credit: '摄影 薛思阳（df45086）· <a href="https://commons.wikimedia.org/wiki/File:%E5%A8%84%E5%B1%B1%E5%85%B3%E7%BA%A2%E5%86%9B%E6%88%98%E6%96%97%E9%81%97%E5%9D%80_20140809-A.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY-SA 3.0'
+            },
+            {
+                name: "四渡赤水", x: 0.40, y: 0.45, date: "1935-03",
+                photo: "images/chishui.jpg", thumb: "images/thumbs/chishui.jpg",
+                title: "四渡赤水纪念馆（习水土城）",
+                desc: "1935年1月至3月，红军在川黔滇边界四次渡过赤水河，以高度机动的运动战摆脱国民党军数十万兵力的围追堵截，被誉为毛泽东军事指挥的“得意之笔”。",
+                credit: '摄影 N509FZ · <a href="https://commons.wikimedia.org/wiki/File:Memorial_Hall_of_Red_Army_Crossing_Chishui_River_Four_Times_(20260206151449).jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY-SA 4.0'
+            },
+            {
+                name: "昭通", x: 0.30, y: 0.40, date: "1935-04",
+                photo: "images/zhaotong.jpg", thumb: "images/thumbs/zhaotong.jpg",
+                title: "扎西会议所在地——昭通市威信县",
+                desc: "1935年初，中央红军集结于云南扎西（今昭通市威信县），在此召开扎西会议，完成了遵义会议后的中央领导交接，并作出精简整编、成立中共川南特委等重要决定。",
+                credit: '摄影 ICYWATER · <a href="https://commons.wikimedia.org/wiki/File:%E5%A8%81%E4%BF%A1%E5%A4%A7%E5%9D%9D%E5%AD%90.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY-SA 4.0'
+            },
+            {
+                name: "泸定桥", x: 0.20, y: 0.35, date: "1935-05",
+                photo: "images/ludingqiao.jpg", thumb: "images/thumbs/ludingqiao.jpg",
+                title: "大渡河上的泸定桥",
+                desc: "1935年5月29日，红四团22名突击队员冒着枪林弹雨攀着铁索夺下泸定桥，红军主力得以跨越天险大渡河，粉碎了敌人妄图让红军成为“石达开第二”的计划。",
+                credit: '摄影 Rolf Müller · <a href="https://commons.wikimedia.org/wiki/File:Luding_bridge.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY-SA 3.0'
+            },
+            {
+                name: "夹金山", x: 0.15, y: 0.30, date: "1935-06", labelSide: "left",
+                photo: "images/jiajinshan.jpg", thumb: "images/thumbs/jiajinshan.jpg",
+                title: "夹金山——长征翻越的第一座大雪山",
+                desc: "1935年6月，中央红军翻越海拔4000多米的夹金山，这是长征途中翻越的第一座大雪山。战士们身着单衣，在空气稀薄的风雪中互相搀扶前行，翻越后与红四方面军在懋功胜利会师。",
+                credit: '摄影 Lau Phang · <a href="https://commons.wikimedia.org/wiki/File:%E7%BF%BB%E8%B6%8A%E5%A4%B9%E9%87%91%E5%B1%B1%E9%A3%8E%E6%99%AF_-_panoramio.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC BY-SA 3.0'
+            },
+            {
+                name: "延安", x: 0.10, y: 0.20, date: "1935-10",
+                photo: "images/yanan.jpg", thumb: "images/thumbs/yanan.jpg",
+                title: "延安宝塔山",
+                desc: "1935年10月19日，中央红军到达陕北吴起镇，历时368天、行程二万五千里的长征胜利结束。1937年1月，中共中央进驻延安，宝塔山从此成为中国革命圣地延安的象征。",
+                credit: '摄影 H2v5o68z · <a href="https://commons.wikimedia.org/wiki/File:%E5%BB%B6%E5%AE%89%E5%AE%9D%E5%A1%94%E5%B1%B1.jpg" target="_blank" rel="noopener">Wikimedia Commons</a> · CC0'
+            }
         ];
         
         let currentPoint = -1;
@@ -531,14 +956,173 @@
         // 设置音频音量
         backgroundMusic.volume = volumeControl.value;
         
+        // ---------- 途经城市历史影像面板 ----------
+        const photoImg = document.getElementById('photo-img');
+        const photoCredit = document.getElementById('photo-credit');
+        const photoCityName = document.getElementById('photo-city-name');
+        const photoCityDate = document.getElementById('photo-city-date');
+        const photoTitle = document.getElementById('photo-title');
+        const photoDesc = document.getElementById('photo-desc');
+        const photoStrip = document.getElementById('photo-strip');
+        const lightbox = document.getElementById('photo-lightbox');
+        const lightboxImg = document.getElementById('lightbox-img');
+        const lightboxCaption = document.getElementById('lightbox-caption');
+        
+        let currentPhotoIndex = -1;
+        let photoToken = 0;
+        
+        // 生成缩略图导航条
+        function buildPhotoStrip() {
+            photoStrip.innerHTML = '';
+            routePoints.forEach((point, index) => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'photo-chip';
+                chip.title = `${point.name} · ${formatDate(point.date)}`;
+                
+                const thumbImg = document.createElement('img');
+                thumbImg.src = point.thumb;
+                thumbImg.alt = `${point.name}缩略图`;
+                thumbImg.loading = 'lazy';
+                
+                const chipLabel = document.createElement('span');
+                chipLabel.className = 'chip-label';
+                chipLabel.textContent = point.name;
+                
+                chip.appendChild(thumbImg);
+                chip.appendChild(chipLabel);
+                chip.addEventListener('click', () => selectPhoto(index));
+                photoStrip.appendChild(chip);
+            });
+        }
+        
+        // 切换到某个城市的照片与讲解
+        function selectPhoto(index, options) {
+            const point = routePoints[index];
+            if (!point) return;
+            if (currentPhotoIndex === index && !(options && options.force)) return;
+            
+            currentPhotoIndex = index;
+            const token = ++photoToken;
+            
+            photoCityName.textContent = point.name;
+            photoCityDate.textContent = formatDate(point.date);
+            photoTitle.textContent = point.title;
+            photoDesc.textContent = point.desc;
+            photoCredit.innerHTML = point.credit;
+            
+            photoStrip.querySelectorAll('.photo-chip').forEach((chip, i) => {
+                chip.classList.toggle('active', i === index);
+            });
+            
+            const show = () => {
+                if (token !== photoToken) return;
+                photoImg.src = point.photo;
+                photoImg.alt = `${point.name} · ${point.title}`;
+                photoImg.classList.remove('is-fading');
+            };
+            
+            if (options && options.instant) {
+                show();
+                renderPreview();
+                return;
+            }
+            
+            // 先淡出，等新图加载完成后再替换，避免闪出半张旧图
+            photoImg.classList.add('is-fading');
+            const preloader = new Image();
+            preloader.onload = show;
+            preloader.onerror = show;
+            preloader.src = point.photo;
+            renderPreview();
+        }
+        
+        // 按当前进度重绘画布（供窗口尺寸变化时调用）
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            if (animationProgress > 0) {
+                drawPoints(animationProgress);
+                drawRoute(animationProgress);
+            } else {
+                drawPoints(0, true);
+                drawRoute(0, true);
+            }
+        }
+        
+        // 未开始演示时，选中城市后重绘预览态（高亮该城市）
+        function renderPreview() {
+            if (isAnimating || animationProgress > 0) return;
+            redraw();
+        }
+        
+        // 点击地图上的城市圆点查看影像
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            let hit = -1;
+            let minDist = 26;
+            routePoints.forEach((point, index) => {
+                const dx = point.x * canvas.width - clickX;
+                const dy = point.y * canvas.height - clickY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    hit = index;
+                }
+            });
+            if (hit >= 0) selectPhoto(hit);
+        });
+        canvas.style.cursor = 'pointer';
+        
+        // 点击大图查看原图
+        photoImg.addEventListener('click', () => {
+            lightboxImg.src = photoImg.src;
+            lightboxImg.alt = photoImg.alt;
+            lightboxCaption.textContent = `${photoCityName.textContent} · ${photoTitle.textContent}`;
+            lightbox.classList.add('open');
+        });
+        
+        function closeLightbox() {
+            lightbox.classList.remove('open');
+        }
+        
+        lightbox.addEventListener('click', closeLightbox);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeLightbox();
+        });
+        
         // 绘制地图背景
         function drawBackground() {
             ctx.fillStyle = '#f9f9f9';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
         
+        // 未开始演示时，先画出整条计划路线（浅色虚线），让观众看清全程走向
+        function drawPlannedRoute() {
+            ctx.save();
+            ctx.beginPath();
+            ctx.setLineDash([6, 6]);
+            ctx.strokeStyle = 'rgba(196, 30, 58, 0.35)';
+            ctx.lineWidth = 3;
+            routePoints.forEach((point, index) => {
+                const x = point.x * canvas.width;
+                const y = point.y * canvas.height;
+                if (index === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            ctx.restore();
+        }
+        
         // 修改路线绘制函数
         function drawRoute(progress) {
+            if (progress <= 0) {
+                drawPlannedRoute();
+                return;
+            }
+            
             // 先绘制路线
             ctx.beginPath();
             ctx.strokeStyle = '#c41e3a';
@@ -666,21 +1250,37 @@
         }
         
         // 修改地点标记绘制函数
-        function drawPoints(progress) {
+        // isPreview 为 true 时（尚未开始演示），把所有城市都淡淡地画出来，
+        // 并高亮当前照片对应的城市，方便点击查看
+        function drawPoints(progress, isPreview) {
             const currentIndex = Math.floor(progress * (routePoints.length - 1));
             
             routePoints.forEach((point, index) => {
-                if (index > currentIndex) return;
+                if (!isPreview && index > currentIndex) return;
                 
                 const x = point.x * canvas.width;
                 const y = point.y * canvas.height;
+                const isActive = isPreview ? index === currentPhotoIndex : index === currentIndex;
                 
                 // 绘制圆点
                 ctx.beginPath();
-                ctx.fillStyle = index === currentIndex ? '#ff0000' : '#c41e3a';
-                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                if (isActive) {
+                    ctx.fillStyle = '#ff0000';
+                } else {
+                    ctx.fillStyle = isPreview ? 'rgba(196, 30, 58, 0.40)' : '#c41e3a';
+                }
+                ctx.arc(x, y, isActive ? 7 : 5, 0, Math.PI * 2);
                 ctx.fill();
                 
+                // 预览态下给当前城市加一圈光晕
+                if (isPreview && isActive) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.35)';
+                    ctx.lineWidth = 2;
+                    ctx.arc(x, y, 13, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
                 // 设置文本样式
                 ctx.font = 'bold 14px Microsoft YaHei';
                 ctx.textAlign = 'center';
@@ -716,6 +1316,23 @@
                     }
                 }
                 
+                // 个别城市相距很近，用 labelSide 手动指定标签方向，避免文字重叠
+                if (point.labelSide === "left") {
+                    textX = x - 20;
+                    textY = y;
+                } else if (point.labelSide === "right") {
+                    textX = x + 20;
+                    textY = y;
+                } else if (point.labelSide === "top") {
+                    textX = x;
+                    textY = y - 20;
+                }
+                
+                // 防止标签跑出画布被裁掉（如起点瑞金、终点延安靠近边缘）
+                const labelHalf = textWidth / 2 + 8;
+                textX = Math.min(Math.max(textX, labelHalf), canvas.width - labelHalf);
+                textY = Math.min(Math.max(textY, 18), canvas.height - 14);
+                
                 // 绘制文本背景
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                 const padding = 4;
@@ -727,7 +1344,11 @@
                 );
                 
                 // 绘制文本
-                ctx.fillStyle = index === currentIndex ? '#ff0000' : '#c41e3a';
+                if (isActive) {
+                    ctx.fillStyle = '#ff0000';
+                } else {
+                    ctx.fillStyle = isPreview ? 'rgba(120, 120, 120, 0.85)' : '#c41e3a';
+                }
                 ctx.fillText(point.name, textX, textY);
             });
         }
@@ -769,6 +1390,10 @@
             progressBar.style.width = `${animationProgress * 100}%`;
             updateTimeline(animationProgress);
             
+            // 行进到新的城市时，同步切换历史影像
+            const cityIndex = Math.floor(animationProgress * (routePoints.length - 1));
+            if (cityIndex !== currentPhotoIndex) selectPhoto(cityIndex);
+            
             // 继续动画
             if (animationProgress < 1 && isAnimating) {
                 requestAnimationFrame(animate);
@@ -785,6 +1410,11 @@
             isAnimating = true;
             startTime = null;
             startBtn.textContent = '播放中...';
+            
+            // 点击"开始演示"时同步自动播放背景音乐
+            // （由用户点击触发，浏览器不会拦截自动播放）
+            playMusic();
+            
             requestAnimationFrame(animate);
         }
         
@@ -795,17 +1425,20 @@
             startTime = null;
             startBtn.textContent = '开始演示';
             
-            // 清除画布并重绘初始状态
+            // 清除画布并重绘初始状态（预览态：完整虚线路线 + 全部城市）
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBackground();
-            drawPoints(0);
-            drawRoute(0);
+            drawPoints(0, true);
+            drawRoute(0, true);
             
             // 重置进度条
             progressBar.style.width = '0%';
             
             // 重置时间线
             updateTimeline(0);
+            
+            // 影像面板回到起点城市（瑞金）
+            selectPhoto(0, { instant: true });
             
             // 重置音乐状态
             if (isMusicPlaying) {
@@ -817,20 +1450,33 @@
         startBtn.addEventListener('click', startAnimation);
         resetBtn.addEventListener('click', resetAnimation);
         
-        // 播放/暂停背景音乐
+        // 播放背景音乐（"开始演示"按钮也会调用它）
+        function playMusic() {
+            if (isMusicPlaying) return;
+            
+            isMusicPlaying = true;
+            musicBtn.textContent = '暂停音乐';
+            backgroundMusic.play().catch(error => {
+                // 浏览器在无用户交互时会拦截自动播放
+                console.warn('背景音乐播放失败:', error);
+                isMusicPlaying = false;
+                musicBtn.textContent = '播放音乐';
+            });
+        }
+        
+        // 暂停背景音乐
+        function pauseMusic() {
+            backgroundMusic.pause();
+            isMusicPlaying = false;
+            musicBtn.textContent = '播放音乐';
+        }
+        
+        // 播放/暂停背景音乐（手动开关）
         function toggleMusic() {
             if (isMusicPlaying) {
-                backgroundMusic.pause();
-                musicBtn.textContent = '播放音乐';
-                isMusicPlaying = false;
+                pauseMusic();
             } else {
-                backgroundMusic.play().catch(error => {
-                    console.error('音频播放失败:', error);
-                    // 很多浏览器需要用户交互才能自动播放
-                    alert('请点击"播放音乐"按钮来手动播放背景音乐');
-                });
-                musicBtn.textContent = '暂停音乐';
-                isMusicPlaying = true;
+                playMusic();
             }
         }
         
@@ -843,7 +1489,17 @@
         musicBtn.addEventListener('click', toggleMusic);
         volumeControl.addEventListener('input', adjustVolume);
         
+        // 预先加载全部城市照片，保证演示过程中切换影像不卡顿
+        function preloadPhotos() {
+            routePoints.forEach(point => {
+                const img = new Image();
+                img.src = point.photo;
+            });
+        }
+        window.addEventListener('load', preloadPhotos);
+        
         // 初始化
+        buildPhotoStrip();
         resetAnimation();
         
         // 添加日期格式化函数

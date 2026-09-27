@@ -34,7 +34,7 @@
 | 站点 | 入口 | 说明 |
 |---|---|---|
 | 京杭大运河数字展厅 | `grand_canal_project/index.html` | 含世界遗产 / 古城镇 / 非物质遗产三个子页面 |
-| 红军长征路线图 | `long-march/long-march.html` | 沿路线逐点推进的动画演示，含背景音乐 |
+| 红军长征路线图 | `long-march/long-march.html` | 沿路线逐点推进的动画演示，**途经城市自动切换历史影像**，含背景音乐 |
 | 太阳系三维动画演示 | `solar-system-3d/index.html` | Three.js 太阳系，可拖动旋转 |
 
 ---
@@ -60,7 +60,7 @@ AInetwork/
 │   ├── gesture-demo/           # 空中画函数
 │   └── gesture-shudu/          # 手势数独（主）+ 巨型全息（子站点）
 ├── grand_canal_project/        # 大运河数字展厅
-├── long-march/                 # 红军长征路线图
+├── long-march/                 # 红军长征路线图（images/ 为途经城市历史影像，授权见 CREDITS.md）
 ├── math_game/                  # 10 以内加减法
 ├── qidian/                     # 启点 · DeepSeek 学习诊所（自带 Node 服务，见 README）
 ├── solar-system-3d/            # 太阳系三维
