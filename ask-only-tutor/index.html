@@ -1,0 +1,1769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>只问不答 · 课堂 AI 助教</title>
+<meta name="description" content="只问不答的课堂 AI 助教：不直接给答案，用苏格拉底式追问引导学生自己破题。含教师面板、迁移检测与课堂记录导出。">
+<style>
+/* ==========================================================================
+   只问不答 · 课堂 AI 助教
+   零外部依赖，单文件运行；演示模式离线可用，也可接入 OpenAI 兼容大模型。
+   ========================================================================== */
+:root{
+  --bg:#f3efe4;
+  --bg-2:#eae4d5;
+  --surface:#fffdf8;
+  --surface-2:#f8f4ea;
+  --ink:#1b2530;
+  --ink-2:#475569;
+  --muted:#6b7280;
+  --line:#e2dac8;
+  --line-2:#efe9db;
+  --teal:#0f766e;
+  --teal-deep:#0b4f4a;
+  --teal-soft:#e3f1ee;
+  --amber:#b45309;
+  --amber-soft:#fdf0d9;
+  --red:#b91c1c;
+  --red-soft:#fdecec;
+  --shadow:0 1px 2px rgba(27,37,48,.05), 0 10px 28px rgba(27,37,48,.07);
+  --shadow-sm:0 1px 2px rgba(27,37,48,.06), 0 4px 12px rgba(27,37,48,.05);
+  --r:16px;
+  --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Segoe UI",Roboto,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font);background:
+    radial-gradient(1200px 600px at 15% -10%, #fbf8ef 0%, transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, #e8efe9 0%, transparent 55%),
+    var(--bg);
+  color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+svg{display:block}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------------- 顶栏 ---------------- */
+.topbar{position:sticky;top:0;z-index:40;background:linear-gradient(180deg,#122029,#16262f);color:#f8fafc;border-bottom:1px solid rgba(255,255,255,.08)}
+.topbar-inner{max-width:1500px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{
+  width:42px;height:42px;border-radius:13px;flex:none;
+  display:grid;place-items:center;font-weight:800;font-size:21px;
+  background:linear-gradient(135deg,#14b8a6,#0f766e);color:#fff;
+  box-shadow:0 6px 18px rgba(20,184,166,.35);letter-spacing:.02em;
+}
+.brand-text h1{font-size:17px;font-weight:700;letter-spacing:.01em;line-height:1.2}
+.brand-text p{font-size:12px;color:#a7b6c2;margin-top:2px}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.select-wrap select{
+  appearance:none;background:#1e303a;color:#eef6f5;border:1px solid #33474f;
+  padding:8px 34px 8px 12px;border-radius:10px;font-size:13px;font-weight:600;
+  background-image:linear-gradient(45deg,transparent 50%,#8fb3ad 50%),linear-gradient(135deg,#8fb3ad 50%,transparent 50%);
+  background-position:calc(100% - 17px) 52%,calc(100% - 12px) 52%;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+}
+.select-wrap select:focus-visible{outline:2px solid #5eead4;outline-offset:1px}
+.mode-pill{
+  font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;
+  background:rgba(94,234,212,.14);color:#7dd3c8;border:1px solid rgba(94,234,212,.28);white-space:nowrap;
+}
+.mode-pill.api{background:rgba(251,191,36,.15);color:#fcd34d;border-color:rgba(251,191,36,.32)}
+.tb-btn{
+  font-size:13px;font-weight:600;padding:8px 13px;border-radius:10px;
+  background:#1e303a;border:1px solid #33474f;color:#e7f1f0;white-space:nowrap;
+  transition:background .15s,border-color .15s,transform .1s;
+}
+.tb-btn:hover{background:#27404b;border-color:#45606a}
+.tb-btn:active{transform:translateY(1px)}
+.tb-btn:focus-visible{outline:2px solid #5eead4;outline-offset:2px}
+.tb-btn.timer{font-variant-numeric:tabular-nums;min-width:76px;text-align:center;color:#fcd34d;border-color:#5a4a22;background:#2a2a1c}
+.tb-btn.timer.low{color:#fecaca;border-color:#7f1d1d;background:#3a1c1c;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.55}}
+.tb-btn.icon{font-size:16px;padding:8px 11px}
+
+/* ---------------- 布局 ---------------- */
+.layout{max-width:1500px;margin:0 auto;padding:18px 20px 28px;display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:18px;align-items:start}
+.stage{min-width:0;display:flex;flex-direction:column;gap:14px;min-height:0}
+
+/* 场景卡 */
+.scenario-card{
+  position:relative;overflow:hidden;color:#f2fbf9;border-radius:var(--r);
+  padding:18px 20px 15px;background:
+    radial-gradient(560px 220px at 88% -30%, rgba(20,184,166,.35), transparent 70%),
+    linear-gradient(135deg,#123834 0%,#0d2b28 58%,#122029 100%);
+  box-shadow:var(--shadow);
+}
+.scenario-card::after{
+  content:"";position:absolute;right:-40px;bottom:-70px;width:230px;height:230px;
+  border-radius:50%;border:1px solid rgba(255,255,255,.09);pointer-events:none;
+}
+.sc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+.sc-tag{font-size:11.5px;font-weight:700;letter-spacing:.06em;padding:3px 9px;border-radius:999px;background:rgba(94,234,212,.16);color:#99f6e4;border:1px solid rgba(94,234,212,.25)}
+.sc-tag.ghost{background:transparent;color:#a7c4c0;border-color:rgba(255,255,255,.16)}
+.sc-group{margin-left:auto;font-size:12px;color:#a9c6c1;background:rgba(255,255,255,.06);padding:3px 10px;border-radius:999px}
+.scenario-card h2{font-size:clamp(19px,2.2vw,25px);font-weight:700;line-height:1.4;letter-spacing:.01em;text-wrap:balance}
+.sc-rules{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.sc-rules span{font-size:12px;color:#cfe9e3;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);padding:4px 9px;border-radius:8px}
+.sc-rules b{color:#fcd34d;font-weight:700}
+.sc-flow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#9fbcb7}
+.sc-flow i{width:14px;height:1px;background:rgba(255,255,255,.22);display:block}
+.sc-foot{display:flex;align-items:center;gap:14px;margin-top:12px;flex-wrap:wrap}
+.sc-src{font-size:11.5px;color:#87a5a1}
+.link-btn{color:#7dd3c8;font-size:13px;font-weight:600;text-decoration:none;border-bottom:1px dashed rgba(125,211,200,.5);padding-bottom:1px}
+.link-btn:hover{color:#a7f3e8;border-bottom-style:solid}
+.link-btn:focus-visible{outline:2px solid #5eead4;outline-offset:3px;border-radius:3px}
+
+/* ---------------- 对话区 ---------------- */
+.chat{
+  flex:1;min-height:160px;overflow-y:auto;padding:6px 8px 14px 4px;
+  display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth;
+  scrollbar-width:thin;scrollbar-color:#cfc7b4 transparent;
+}
+.chat::-webkit-scrollbar{width:9px}
+.chat::-webkit-scrollbar-thumb{background:#d6cdb9;border-radius:999px;border:2px solid transparent;background-clip:content-box}
+.msg{display:flex;gap:10px;max-width:min(760px,94%);animation:rise .28s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.msg{animation:none}.chat{scroll-behavior:auto}}
+.msg.student{margin-left:auto;flex-direction:row-reverse}
+.avatar{
+  width:36px;height:36px;flex:none;border-radius:12px;display:grid;place-items:center;
+  font-size:14px;font-weight:800;color:#0b4f4a;background:var(--teal-soft);border:1px solid #cfe6e1;
+}
+.msg.student .avatar{background:#123834;color:#bdf3ea;border-color:#1d4742}
+.bubble-wrap{min-width:0;display:flex;flex-direction:column;gap:5px}
+.msg.student .bubble-wrap{align-items:flex-end}
+.msg-meta{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);padding:0 3px}
+.msg.student .msg-meta{flex-direction:row-reverse}
+.chip{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:999px;background:var(--amber-soft);color:var(--amber);border:1px solid #f1d9ab}
+.chip.end{background:var(--red-soft);color:var(--red);border-color:#f3c9c9}
+.bubble{
+  background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--teal);
+  padding:12px 15px;border-radius:5px 15px 15px 15px;box-shadow:var(--shadow-sm);
+  font-size:16px;line-height:1.7;word-break:break-word;white-space:pre-wrap;
+}
+.msg.student .bubble{
+  background:linear-gradient(135deg,#0f766e,#0d5f59);color:#f2fbf9;border:1px solid #0a4a45;
+  border-left:1px solid #0a4a45;border-radius:15px 5px 15px 15px;box-shadow:0 6px 18px rgba(15,118,110,.22);
+  font-size:15.5px;
+}
+.tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2)}
+.tag.t-套答案{background:var(--red-soft);color:var(--red);border-color:#f3c9c9}
+.tag.t-卡住{background:#fff7e6;color:#92400e;border-color:#fde3b3}
+.tag.t-提出假设{background:#eef2ff;color:#4338ca;border-color:#dbe2ff}
+.tag.t-事实描述{background:var(--teal-soft);color:#0b4f4a;border-color:#cfe6e1}
+.typing .bubble{display:flex;gap:5px;align-items:center;min-height:46px}
+.typing .bubble span{width:7px;height:7px;border-radius:50%;background:#9bb8b3;animation:blink 1s infinite}
+.typing .bubble span:nth-child(2){animation-delay:.15s}
+.typing .bubble span:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+
+/* ---------------- 输入区 ---------------- */
+.composer{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px 9px;box-shadow:var(--shadow-sm)}
+.quick{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px}
+.quick button{
+  font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);
+  padding:5px 11px;border-radius:999px;transition:background .15s,border-color .15s,color .15s;
+}
+.quick button:hover{background:var(--teal-soft);border-color:#bcdcd5;color:var(--teal-deep)}
+.quick button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.input-row{display:flex;gap:10px;align-items:flex-end}
+#input{
+  flex:1;min-height:48px;max-height:150px;resize:none;border:1px solid var(--line);border-radius:12px;
+  background:var(--surface-2);padding:11px 14px;font-size:15px;line-height:1.55;color:var(--ink);
+  transition:border-color .15s,box-shadow .15s,background .15s;
+}
+#input:focus{outline:none;border-color:#8ec8bf;box-shadow:0 0 0 3px rgba(15,118,110,.12);background:#fff}
+#input:disabled{background:#f1ede2;color:#9aa3ad;cursor:not-allowed}
+.send{
+  flex:none;height:48px;padding:0 24px;border-radius:12px;font-weight:700;font-size:15px;color:#fff;
+  background:linear-gradient(135deg,#0f766e,#0b5f59);box-shadow:0 6px 16px rgba(15,118,110,.28);
+  transition:transform .1s,box-shadow .15s,opacity .15s;
+}
+.send:hover{box-shadow:0 8px 20px rgba(15,118,110,.36)}
+.send:active{transform:translateY(1px)}
+.send:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.send:focus-visible{outline:3px solid #5eead4;outline-offset:2px}
+.composer-meta{display:flex;align-items:center;gap:12px;margin-top:8px;padding:0 3px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.composer-meta .link-btn{font-size:11.5px;margin-left:auto;color:var(--teal);border-bottom-color:rgba(15,118,110,.35)}
+.composer-meta .link-btn:hover{color:var(--teal-deep)}
+
+/* ---------------- 教师面板 ---------------- */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);position:sticky;top:84px;max-height:calc(100vh - 104px);display:flex;flex-direction:column;overflow:hidden}
+.panel-head{display:flex;align-items:center;gap:8px;padding:9px 10px 0;border-bottom:1px solid var(--line-2)}
+.tabs{display:flex;gap:2px;flex:1}
+.tab{font-size:13px;font-weight:600;color:var(--muted);padding:8px 11px 10px;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--teal-deep);border-bottom-color:var(--teal)}
+.tab:focus-visible{outline:2px solid var(--teal);outline-offset:-2px;border-radius:6px}
+.icon-btn{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:18px;color:var(--muted);flex:none}
+.icon-btn:hover{background:var(--surface-2);color:var(--ink)}
+.panel-body{overflow-y:auto;padding:13px 14px 18px;scrollbar-width:thin}
+.pane{display:none}
+.pane.active{display:block}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
+.kpi{background:var(--surface-2);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px}
+.kpi b{display:block;font-size:23px;line-height:1.15;font-variant-numeric:tabular-nums;color:var(--teal-deep)}
+.kpi span{display:block;font-size:11.5px;color:var(--muted);margin-top:3px}
+.kpi.danger b{color:var(--red)}
+.block{margin-bottom:15px}
+.block-title{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--ink-2);margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.bars{display:flex;flex-direction:column;gap:7px}
+.bar-row{display:grid;grid-template-columns:64px 1fr 24px;align-items:center;gap:8px;font-size:12px;color:var(--ink-2)}
+.bar-track{height:7px;background:var(--line-2);border-radius:999px;overflow:hidden}
+.bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#14b8a6,#0f766e);transition:width .35s ease}
+.bar-row:nth-child(2) .bar-fill{background:linear-gradient(90deg,#60a5fa,#3b82f6)}
+.bar-row:nth-child(3) .bar-fill{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+.bar-row:nth-child(4) .bar-fill{background:linear-gradient(90deg,#f87171,#ef4444)}
+.bar-row:nth-child(5) .bar-fill{background:linear-gradient(90deg,#a78bfa,#8b5cf6)}
+.bar-row:nth-child(6) .bar-fill{background:linear-gradient(90deg,#94a3b8,#64748b)}
+.advice{font-size:12.5px;line-height:1.6;color:var(--ink-2);background:var(--teal-soft);border:1px solid #cfe6e1;border-radius:11px;padding:10px 12px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.field span{font-size:12px;color:var(--ink-2);font-weight:600}
+.field input,.field select,.field textarea{
+  border:1px solid var(--line);border-radius:9px;background:#fff;padding:8px 10px;font-size:13.5px;width:100%;
+}
+.field textarea{resize:vertical;min-height:86px;line-height:1.6}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#8ec8bf;box-shadow:0 0 0 3px rgba(15,118,110,.1)}
+.muted{color:var(--muted)}
+.small{font-size:11.5px;line-height:1.55}
+.btn-row{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
+.btn{
+  font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:9px;border:1px solid var(--line);
+  background:var(--surface-2);color:var(--ink);transition:background .15s,border-color .15s;
+}
+.btn:hover{background:#f1ecdf;border-color:#d5cbb6}
+.btn.primary{background:linear-gradient(135deg,#0f766e,#0b5f59);color:#fff;border-color:#0b5f59}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.danger{color:var(--red);border-color:#f0cccc;background:var(--red-soft);margin-top:6px}
+.btn:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+/* 记录 */
+.record-list{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;padding-right:2px}
+.rec{display:flex;gap:9px;padding:8px 10px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface-2);font-size:12.5px}
+.rec-role{flex:none;font-weight:800;font-size:10.5px;letter-spacing:.04em;padding:3px 7px;height:fit-content;border-radius:6px;background:#e8efe9;color:#0b4f4a}
+.rec.student .rec-role{background:#123834;color:#bdf3ea}
+.rec-body{min-width:0;flex:1}
+.rec-text{line-height:1.55;word-break:break-word}
+.rec-meta{display:flex;align-items:center;gap:7px;margin-top:3px;font-size:10.5px;color:var(--muted)}
+.star{margin-left:auto;font-size:13px;color:#c8bda4;padding:0 2px}
+.star.on{color:#d97706}
+.star:hover{color:#d97706}
+
+/* 迁移 */
+.q-card{border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:10px;background:var(--surface-2)}
+.q-title{font-size:13.5px;font-weight:600;line-height:1.6;margin-bottom:8px}
+.q-title .qno{color:var(--teal-deep);font-weight:800;margin-right:5px}
+.q-opt{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.55;padding:5px 7px;border-radius:8px;cursor:pointer}
+.q-opt:hover{background:#efe9db}
+.q-opt input{margin-top:3px;accent-color:var(--teal);flex:none}
+.q-opt.correct{background:#e7f6ee;color:#166534}
+.q-opt.wrong{background:var(--red-soft);color:var(--red)}
+.q-explain{font-size:12px;color:var(--ink-2);margin-top:6px;padding:7px 9px;background:#fff;border:1px dashed var(--line);border-radius:8px;line-height:1.55}
+.result{margin-top:10px;padding:10px 12px;border-radius:11px;background:var(--teal-soft);border:1px solid #cfe6e1;font-size:13px;font-weight:600;color:var(--teal-deep)}
+.preview{background:#122029;color:#d9e6e3;border-radius:11px;padding:12px;font-size:11.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+details.block summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:8px}
+details.block[open] summary{color:var(--teal-deep)}
+
+/* ---------------- 设置弹窗 ---------------- */
+dialog{
+  border:0;border-radius:18px;padding:0;width:min(680px,94vw);max-height:90vh;overflow:auto;
+  background:var(--surface);color:var(--ink);box-shadow:0 30px 80px rgba(10,20,25,.35);
+}
+dialog::backdrop{background:rgba(12,24,28,.55);backdrop-filter:blur(3px)}
+.settings{padding:18px 20px 16px}
+.settings header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.settings h3{font-size:17px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.mode-field{border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin:4px 0 12px}
+.mode-field legend{font-size:12px;font-weight:700;color:var(--ink-2);padding:0 5px}
+.radio{display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;cursor:pointer}
+.radio input{accent-color:var(--teal)}
+.api-fields{background:var(--surface-2);border:1px solid var(--line-2);border-radius:12px;padding:12px}
+.settings footer{display:flex;justify-content:flex-end;gap:9px;margin-top:16px;padding-top:13px;border-top:1px solid var(--line-2)}
+
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);z-index:100;
+  background:#122029;color:#e8f4f1;font-size:13px;font-weight:600;padding:11px 18px;border-radius:999px;
+  box-shadow:0 12px 30px rgba(10,20,25,.3);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+  max-width:86vw;text-align:center;
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------------- 大屏模式 ---------------- */
+body.projector .panel{display:none}
+body.projector .layout{grid-template-columns:minmax(0,1fr);max-width:1240px}
+body.projector .stage{min-height:calc(100vh - 100px)}
+body.projector .scenario-card h2{font-size:clamp(24px,3vw,34px)}
+body.projector .sc-rules span,body.projector .sc-flow{font-size:14px}
+body.projector .bubble{font-size:21px;line-height:1.8;padding:16px 20px}
+body.projector .msg{max-width:min(920px,96%)}
+body.projector .avatar{width:44px;height:44px;font-size:16px;border-radius:14px}
+body.projector .msg-meta{font-size:13px}
+body.projector #input{font-size:18px;min-height:56px}
+body.projector .send{height:56px;font-size:17px;padding:0 30px}
+body.projector .quick button{font-size:14px;padding:7px 14px}
+
+/* ---------------- 响应式 ---------------- */
+/* 桌面端锁定一屏：对话区内部滚动，输入框永远可见 */
+@media (min-width:1121px){
+  body{overflow:hidden}
+  .layout{height:calc(100vh - 63px);padding-top:14px;padding-bottom:16px}
+  .stage{height:100%}
+  .chat{min-height:0}
+  .panel{position:relative;top:0;height:100%;max-height:none}
+}
+
+@media (max-width:1120px){
+  body{height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+  .topbar{flex:none}
+  .layout{flex:1;min-height:0;height:auto;grid-template-columns:minmax(0,1fr);align-items:stretch}
+  .stage{height:100%;min-height:0}
+  .chat{min-height:0}
+  .panel{position:fixed;right:14px;top:84px;bottom:14px;width:min(380px,calc(100vw - 28px));z-index:50;max-height:none;transform:translateX(calc(100% + 24px));transition:transform .22s ease;box-shadow:0 24px 60px rgba(10,20,25,.25)}
+  .panel.open{transform:none}
+}
+@media (max-width:720px){
+  .panel{top:12px;bottom:12px}
+  .topbar-inner{padding:9px 12px;gap:9px}
+  .brand-text p{display:none}
+  .brand-text h1{font-size:15px}
+  .logo{width:36px;height:36px;font-size:18px;border-radius:11px}
+  .layout{padding:12px 12px 20px}
+  .scenario-card{padding:13px 14px 11px}
+  .sc-flow{display:none}
+  .sc-source,.sc-src{display:none}
+  .scenario-card h2{font-size:18px}
+  .sc-rules{margin-top:9px;gap:5px}
+  .sc-rules span{font-size:11px;padding:3px 7px}
+  .bubble{font-size:15px;padding:11px 13px}
+  .msg.student .bubble{font-size:14.5px}
+  .composer{padding:9px 10px 7px}
+  .send{width:64px;padding:0 10px}
+  .grid2{grid-template-columns:1fr}
+}
+
+/* ---------------- 打印 ---------------- */
+#printDoc{display:none}
+@media print{
+  body{background:#fff}
+  body>*{display:none !important}
+  #printDoc{display:block !important;font-family:var(--font);color:#111;font-size:11.5pt;line-height:1.7}
+  #printDoc h1{font-size:18pt;margin:0 0 4pt}
+  #printDoc h2{font-size:13pt;margin:16pt 0 6pt;border-bottom:1px solid #ddd;padding-bottom:3pt}
+  #printDoc p{margin:0 0 6pt}
+  #printDoc .meta{color:#444;font-size:10pt}
+  #printDoc .turn{margin:0 0 7pt;padding-left:10pt;border-left:2px solid #ccc}
+  #printDoc .turn b{display:inline-block;min-width:52pt}
+  #printDoc table{width:100%;border-collapse:collapse;font-size:10.5pt;margin:6pt 0}
+  #printDoc th,#printDoc td{border:1px solid #ccc;padding:4pt 6pt;text-align:left}
+  #printDoc .prompt{font-family:ui-monospace,Menlo,monospace;font-size:9pt;white-space:pre-wrap;background:#f6f6f6;padding:6pt;border:1px solid #ddd}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">问</div>
+      <div class="brand-text">
+        <h1>只问不答 · 课堂 AI 助教</h1>
+        <p>把答案留在学生嘴里</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <label class="select-wrap">
+        <span class="sr">选择课堂场景</span>
+        <select id="scenarioSelect"></select>
+      </label>
+      <span class="mode-pill" id="modePill">演示模式</span>
+      <button class="tb-btn timer" id="timerBtn" title="点击开始 / 暂停计时">15:00</button>
+      <button class="tb-btn" id="projectorBtn" title="投影模式：隐藏教师面板、放大字号">大屏</button>
+      <button class="tb-btn" id="panelBtn" title="打开教师面板">教师面板</button>
+      <button class="tb-btn icon" id="settingsBtn" aria-label="课堂设置">⚙</button>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="stage">
+    <div class="scenario-card">
+      <div class="sc-top">
+        <span class="sc-tag" id="scSubject">初中化学</span>
+        <span class="sc-tag ghost" id="scGrade">实验探究</span>
+        <span class="sc-group" id="scGroup">第 1 组 · 4 人</span>
+      </div>
+      <h2 id="scDriving">蜡烛燃烧后，究竟生成了什么？你怎么证明？</h2>
+      <div class="sc-rules">
+        <span>不直接给答案</span>
+        <span>一次只问一个问题</span>
+        <span>最多 <b id="maxTurnLabel">6</b> 问</span>
+        <span>不记真实姓名</span>
+      </div>
+      <div class="sc-flow">
+        <span>抛冲突 5′</span><i></i><span>人机对话 15′</span><i></i><span>慢放验证 8′</span><i></i><span>复述 + 迁移 12′</span>
+      </div>
+      <div class="sc-foot">
+        <button class="link-btn" id="demoBtn">看一段示例对话 →</button>
+        <span class="sc-src">设计参考：上海宝山求真教育集团化学课（2026-01 报道）</span>
+      </div>
+    </div>
+
+    <div class="chat" id="chat" aria-live="polite" aria-label="课堂对话"></div>
+
+    <div class="composer">
+      <div class="quick" id="quickChips"></div>
+      <div class="input-row">
+        <textarea id="input" rows="1" placeholder="输入学生的话……（Enter 发送，Shift+Enter 换行）" aria-label="学生发言"></textarea>
+        <button class="send" id="sendBtn">发送</button>
+      </div>
+      <div class="composer-meta">
+        <span id="turnHint">第 0 / 6 问</span>
+        <span>·</span>
+        <span id="timerHint">计时未开始</span>
+        <button class="link-btn" id="restartBtn">重新开始</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel" id="panel" aria-label="教师面板">
+    <div class="panel-head">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="metrics" role="tab" aria-selected="true">指标</button>
+        <button class="tab" data-tab="record" role="tab" aria-selected="false">记录</button>
+        <button class="tab" data-tab="transfer" role="tab" aria-selected="false">迁移</button>
+        <button class="tab" data-tab="export" role="tab" aria-selected="false">导出</button>
+      </div>
+      <button class="icon-btn" id="panelClose" aria-label="收起面板">×</button>
+    </div>
+    <div class="panel-body">
+      <section class="pane active" data-pane="metrics">
+        <div class="kpis">
+          <div class="kpi"><b id="kpiTurns">0</b><span>AI 提问轮次</span></div>
+          <div class="kpi"><b id="kpiPer">0</b><span>人均提问轮次</span></div>
+          <div class="kpi"><b id="kpiAsk">0</b><span>套答案请求</span></div>
+          <div class="kpi danger"><b id="kpiBlocked">0</b><span>已拦截给答案</span></div>
+        </div>
+        <div class="block">
+          <div class="block-title">发言类型分布</div>
+          <div class="bars" id="tagBars"></div>
+        </div>
+        <div class="block">
+          <div class="block-title">教师观察</div>
+          <label class="field"><span>讲授时长（分钟）</span><input id="teachMinutes" type="number" min="0" max="40" step="1" value="10"></label>
+          <p class="muted small">公开课最常被追问的指标：AI 对话越多，教师讲授时间应越短。下课后可回填实际值。</p>
+        </div>
+        <div class="block">
+          <div class="block-title">本轮建议</div>
+          <p class="advice" id="advice">先让学生开口。第一个问题只问“你看到了什么”，不问“为什么”。</p>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="record">
+        <div class="block">
+          <div class="block-title">对话记录 <span class="muted small" id="recordCount"></span></div>
+          <div class="record-list" id="recordList"></div>
+        </div>
+        <div class="block">
+          <div class="block-title">学生复述</div>
+          <label class="field">
+            <span class="sr">学生复述</span>
+            <textarea id="retell" rows="4" placeholder="我原来怎么想……&#10;现在怎么想……&#10;哪一条证据说服了我……"></textarea>
+          </label>
+          <p class="muted small">建议让学生用“我原来以为……现在认为……因为……”的句式写 3 句话。</p>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="transfer">
+        <div class="block">
+          <div class="block-title">迁移检测 <span class="muted small" id="transferCount"></span></div>
+          <div id="transferList"></div>
+          <button class="btn primary" id="gradeBtn">提交并批改</button>
+          <div class="result" id="transferResult" hidden></div>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="export">
+        <div class="block">
+          <div class="block-title">一键带走</div>
+          <div class="btn-row">
+            <button class="btn primary" id="copyMdBtn">复制 Markdown</button>
+            <button class="btn" id="downloadMdBtn">下载 .md</button>
+            <button class="btn" id="downloadCsvBtn">下载 .csv</button>
+            <button class="btn" id="printBtn">打印 / 存 PDF</button>
+          </div>
+          <p class="muted small">记录只含小组编号，不含学生姓名；CSV 已加 BOM，可直接用 Excel 打开。</p>
+        </div>
+        <div class="block">
+          <div class="block-title">记录预览</div>
+          <pre class="preview" id="exportPreview"></pre>
+        </div>
+        <details class="block">
+          <summary>系统提示词（可复制到任意平台）</summary>
+          <pre class="preview" id="promptPreview"></pre>
+          <div class="btn-row"><button class="btn" id="copyPromptBtn">复制提示词</button></div>
+        </details>
+        <button class="btn danger" id="clearBtn">清空本节课</button>
+      </section>
+    </div>
+  </aside>
+</main>
+
+<dialog id="settingsDialog">
+  <form method="dialog" class="settings" id="settingsForm">
+    <header>
+      <h3>课堂设置</h3>
+      <button class="icon-btn" value="cancel" aria-label="关闭">×</button>
+    </header>
+    <div class="grid2">
+      <label class="field"><span>小组编号</span>
+        <select id="setGroup">
+          <option value="1">第 1 组</option><option value="2">第 2 组</option><option value="3">第 3 组</option>
+          <option value="4">第 4 组</option><option value="5">第 5 组</option><option value="6">第 6 组</option>
+          <option value="7">第 7 组</option><option value="8">第 8 组</option>
+        </select>
+      </label>
+      <label class="field"><span>小组人数</span><input id="setGroupSize" type="number" min="1" max="8" value="4"></label>
+      <label class="field"><span>班级（可选，不填姓名）</span><input id="setClass" placeholder="如 初二(3)班"></label>
+      <label class="field"><span>最多提问轮次</span><input id="setMaxTurns" type="number" min="3" max="10" value="6"></label>
+      <label class="field"><span>对话计时（分钟）</span><input id="setTimer" type="number" min="5" max="40" value="15"></label>
+    </div>
+
+    <fieldset class="mode-field">
+      <legend>回答方式</legend>
+      <label class="radio"><input type="radio" name="mode" value="demo" checked> 演示模式（离线规则引擎，零配置）</label>
+      <label class="radio"><input type="radio" name="mode" value="api"> 接入大模型（OpenAI 兼容接口）</label>
+    </fieldset>
+
+    <div class="api-fields" id="apiFields" hidden>
+      <label class="field"><span>Base URL</span><input id="setBase" placeholder="https://api.deepseek.com/v1" autocomplete="off"></label>
+      <label class="field"><span>模型名</span><input id="setModel" placeholder="deepseek-chat" autocomplete="off"></label>
+      <label class="field"><span>API Key</span><input id="setKey" type="password" placeholder="sk-..." autocomplete="off"></label>
+      <div class="btn-row">
+        <button type="button" class="btn" id="testApiBtn">测试连接</button>
+        <span class="muted small" id="apiStatus"></span>
+      </div>
+      <p class="muted small">Key 只保存在本机浏览器（localStorage）。浏览器直连要求接口允许 CORS；本地 Ollama 可用 http://localhost:11434/v1，模型如 qwen2.5:7b。</p>
+    </div>
+
+    <div id="customFields" hidden>
+      <label class="field"><span>自定义核心问题</span><input id="setCustomDriving" placeholder="如：为什么天空是蓝色的？"></label>
+      <label class="field"><span>知识点（仅教师可见，不会发给学生）</span>
+        <textarea id="setCustomKnowledge" rows="3" placeholder="写下结论与关键证据，供 AI 判断学生是否接近答案。"></textarea>
+      </label>
+    </div>
+
+    <footer>
+      <button class="btn" value="cancel">取消</button>
+      <button type="button" class="btn primary" id="saveSettings">保存</button>
+    </footer>
+  </form>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="printDoc"></div>
+
+<script>
+'use strict';
+
+/* ==========================================================================
+   1. 场景数据
+   ========================================================================== */
+const TAG_LIST = ['事实描述', '提出假设', '卡住', '套答案', '其他'];
+
+const SCENARIOS = {
+  chem: {
+    id: 'chem', label: '初中化学 · 蜡烛燃烧', subject: '初中化学', grade: '实验探究',
+    driving: '蜡烛燃烧后，究竟生成了什么？你怎么证明？',
+    intro: '先不急着下结论。告诉我：你观察到了哪些现象？',
+    knowledge: '石蜡主要含碳、氢元素，燃烧生成二氧化碳和水。干冷烧杯内壁出现水雾可证明水；内壁涂澄清石灰水的烧杯变浑浊可证明二氧化碳；需排除空气中水汽的干扰。',
+    keywords: [
+      [['答案', '直接告诉', '告诉我', '别问', '你就说', '公布'], '不直接给。给你一个小提示：数一数反应前后，元素种类变了吗？'],
+      [['水珠', '水雾', '水汽', '内壁', '小水滴'], '内壁的水雾，可能来自哪里？是蜡烛本身，还是空气里的水？'],
+      [['石灰水', '变浑', '浑浊'], '石灰水变浑浊，通常指向哪种气体？你怎么排除其他可能？'],
+      [['黑烟', '炭黑', '冒烟'], '黑烟说明燃烧不充分。如果氧气更充足，现象会怎么变？'],
+      [['变短', '熔化', '融化', '变矮'], '蜡烛变短是物理变化还是化学变化？你的判断依据是什么？'],
+      [['二氧化碳', 'co2'], '你提到二氧化碳——先别下结论。你手上有什么证据能证明它？'],
+      [['氧气', '消耗', '减少'], '你怎么证明氧气被消耗了？需要设置什么对照？'],
+      [['热', '烫', '温度'], '温度升高能说明发生了什么？它足以证明生成了新物质吗？'],
+      [['质量', '变轻', '变重'], '如果称量反应前后，质量会变吗？哪些因素会干扰称量？'],
+      [['不知道', '没看到', '不会', '没注意'], '那我们放慢看：火焰上方有什么？烧杯内壁呢？']
+    ],
+    fallbacks: [
+      '这个想法有意思。是什么现象让你这么判断的？',
+      '如果只给你一个证据，你会选哪一个？为什么？',
+      '有没有一种情况，会让你的结论不成立？',
+      '你能设计一个小实验来验证吗？需要控制什么条件？',
+      '再看一遍慢放：火焰上方和内壁，各有什么变化？',
+      '快到最后了：用一句话说，你的结论是什么？证据是什么？'
+    ],
+    closing: '6 轮到了。请用一句话回答：蜡烛燃烧生成了什么？你最硬的证据是哪一条？',
+    forbidden: [/生成(了)?(二氧化碳|水和二氧化碳)/, /产物是/, /答案就是/],
+    transfer: [
+      { q: '干冷烧杯罩在火焰上方，内壁出现水雾，说明蜡烛燃烧生成了（ ）', options: ['水', '二氧化碳', '炭黑', '氧气'], answer: 0, explain: '水雾是水蒸气遇冷凝结，说明生成了水。' },
+      { q: '要证明蜡烛燃烧生成二氧化碳，最合适的操作是（ ）', options: ['把干冷烧杯罩在火焰上方', '把内壁涂有澄清石灰水的烧杯罩在火焰上方', '用带火星的木条靠近', '闻气味'], answer: 1, explain: '二氧化碳使澄清石灰水变浑浊。' },
+      { q: '蜡烛燃烧过程中（ ）', options: ['只有物理变化', '只有化学变化', '既有物理变化又有化学变化', '无法判断'], answer: 2, explain: '石蜡熔化是物理变化，燃烧生成新物质是化学变化。' }
+    ],
+    chips: ['没看到明显现象', '看到内壁有水珠', '直接告诉我答案', '我猜生成了二氧化碳', '不知道'],
+    answerHint: '不直接给。给你一个小提示：数一数反应前后，元素种类变了吗？'
+  },
+  phys: {
+    id: 'phys', label: '初中物理 · 浮力', subject: '初中物理', grade: '概念辨析',
+    driving: '同一块橡皮泥，捏成船形能浮，揉成团会沉。为什么？',
+    intro: '先别回答“因为浮力”。你观察到两次有什么不同？',
+    knowledge: '浮力等于排开液体所受的重力（F=ρ液gV排）。船形增大排开水的体积，浮力变大；同时平均密度变小。橡皮泥质量不变。',
+    keywords: [
+      [['答案', '直接告诉', '告诉我', '别问', '你就说'], '不直接给。提示：比较两次排开水的体积。'],
+      [['体积', '排开', '排水'], '船形时排开的水更多还是更少？这会让浮力怎么变？'],
+      [['密度', '平均密度'], '如果算平均密度，船形和团状的差别在哪里？'],
+      [['重力', '重量', '沉'], '沉下去说明重力比浮力大。那浮力由什么决定？'],
+      [['形状', '空心'], '形状改变了什么量？是质量变了，还是排开体积变了？'],
+      [['不知道', '没看到', '不会'], '先做一步：把两坨都放进水里，比较水面上升的高度。']
+    ],
+    fallbacks: [
+      '你的依据是什么？是看到的，还是猜的？',
+      '如果换成一块铁皮，同样的形状还会浮吗？为什么？',
+      '你能用一个量去解释“浮”和“沉”的分界吗？',
+      '做一次对照：只改变形状，不改变质量，结果会怎样？',
+      '再看水面：两次上升的高度一样吗？',
+      '用一句话说：浮力大小和什么有关？'
+    ],
+    closing: '6 轮到了。请用一句话回答：船形为什么能浮？你的证据是什么？',
+    forbidden: [/浮力等于/, /阿基米德原理是/, /因为排开水的重力/],
+    transfer: [
+      { q: '物体浸没在水中，排开水的体积越大，浮力（ ）', options: ['越大', '越小', '不变'], answer: 0, explain: 'F=ρ液gV排，排开体积越大浮力越大。' },
+      { q: '橡皮泥船能浮，主要原因是（ ）', options: ['质量变小了', '排开水的体积变大了', '密度变大了'], answer: 1, explain: '质量不变，船形增大排水体积。' },
+      { q: '浮力的方向是（ ）', options: ['竖直向下', '竖直向上', '水平方向'], answer: 1, explain: '浮力方向竖直向上。' }
+    ],
+    chips: ['橡皮泥船浮着', '直接告诉我答案', '我猜跟体积有关', '不知道'],
+    answerHint: '不直接给。提示：比较两次排开水的体积。'
+  },
+  math: {
+    id: 'math', label: '小学数学 · 分数除法', subject: '小学数学', grade: '算理理解',
+    driving: '3/4 ÷ 1/8 为什么等于 6？用画图或生活例子说明。',
+    intro: '先别写答案。你能用“里面有几个”来说说这个除法吗？',
+    knowledge: '3/4 ÷ 1/8 表示 3/4 里面有几个 1/8。通分：3/4=6/8，6/8÷1/8=6。除以一个分数等于乘它的倒数，本质是“包含除”。',
+    keywords: [
+      [['答案', '直接告诉', '告诉我', '别问', '你就说'], '不直接给。提示：问“3/4 里面有几个 1/8”。'],
+      [['倒数', '乘以', '乘'], '为什么除以一个数等于乘它的倒数？你能用“几份”解释吗？'],
+      [['通分', '同分母'], '通分以后，3/4 和 1/8 分别是多少个 1/8？'],
+      [['画图', '分', '几份', '份'], '把 3/4 按 1/8 一份来分，能分出几份？画出来看看。'],
+      [['6', '六'], '先别写答案。你能说清“6”表示什么吗？是 6 个 1/8，还是 6 个 3/4？'],
+      [['不知道', '不会', '没思路'], '先解决小一点的问题：1/2 ÷ 1/8 里面有几个 1/8？']
+    ],
+    fallbacks: [
+      '这个“6”是从哪里来的？能指给我看吗？',
+      '如果除数是 1/4，结果会怎么变？为什么？',
+      '你能把这道题改成一个生活里的问题吗？',
+      '画图之后，哪一部分是“1/8”，一共有几个？',
+      '倒数的做法和画图的结果对得上吗？',
+      '用一句话说：分数除法的意思是什么？'
+    ],
+    closing: '6 轮到了。请用一句话回答：3/4 ÷ 1/8 表示什么？为什么是 6？',
+    forbidden: [/等于6/, /6个/, /乘倒数就行/, /答案就是/],
+    transfer: [
+      { q: '3/4 ÷ 1/8 =（ ）', options: ['3/32', '6', '2/3'], answer: 1, explain: '3/4 里有 6 个 1/8。' },
+      { q: '除以一个分数，等于乘这个分数的（ ）', options: ['相反数', '倒数', '本身'], answer: 1, explain: '除以一个数等于乘它的倒数。' }
+    ],
+    chips: ['我算出来是 6', '直接告诉我答案', '画图试试', '不知道'],
+    answerHint: '不直接给。提示：问“3/4 里面有几个 1/8”。'
+  },
+  chinese: {
+    id: 'chinese', label: '初中语文 · 说明文语言', subject: '初中语文', grade: '语言品析',
+    driving: '《中国石拱桥》里“大约”“可能”这类词能不能删？为什么？',
+    intro: '先别急着说“不能删”。把原句读一遍，再读删掉后的句子，语气有什么变化？',
+    knowledge: '说明文语言准确、严谨。“大约”“可能”“几乎”等限制性词语体现估计与分寸，删去会绝对化，不符合实际。',
+    keywords: [
+      [['答案', '直接告诉', '告诉我', '别问', '你就说'], '不直接给。提示：先看删掉后，句子的意思发生了什么变化。'],
+      [['删', '去掉', '删去'], '删掉“大约”后，句子的意思从“估计”变成了什么？'],
+      [['准确', '严谨', '科学'], '你提到准确。这个词是在限制范围，还是在表达不确定？'],
+      [['估计', '不确定', '可能'], '如果去掉它，作者要承担什么风险？'],
+      [['数据', '时间', '数字'], '把“大约建成于公元 605 年”改成“建成于 605 年”，有什么不同？'],
+      [['不知道', '不会', '没思路'], '先读原句，再把“大约”删掉读一遍，比较语气。']
+    ],
+    fallbacks: [
+      '你从哪个词看出了这种语气？指出来。',
+      '如果作者当时无法精确测量，他会怎么写？',
+      '换一个词，比如“肯定”，效果一样吗？',
+      '这句话删掉限制词后，还符合事实吗？',
+      '你能从文中再找一个类似的词吗？',
+      '用一句话说：这类词的作用是什么？'
+    ],
+    closing: '6 轮到了。请用一句话回答：这类词能不能删？为什么？',
+    forbidden: [/体现(了)?准确性/, /不能删，因为/, /答案就是/],
+    transfer: [
+      { q: '说明文中“大约”“可能”等词语的作用是（ ）', options: ['让句子更生动', '体现说明语言的准确性', '凑字数'], answer: 1, explain: '限制性词语体现说明文语言的准确、严谨。' },
+      { q: '“赵州桥全长约 50.82 米”中的“约”能否删去？（ ）', options: ['能，数字更简洁', '不能，删后变成精确值，不符合实际'], answer: 1, explain: '“约”表示估计，删去会绝对化。' }
+    ],
+    chips: ['不能删', '直接告诉我答案', '因为更准确', '不知道'],
+    answerHint: '不直接给。提示：先看删掉后，句子的意思发生了什么变化。'
+  },
+  custom: {
+    id: 'custom', label: '自定义 · 任意议题', subject: '自定义', grade: '教师自定',
+    driving: '请在“设置”里填写本节课的核心问题。',
+    intro: '先不急着下结论。关于这个问题，你观察到了什么，或者已经知道什么？',
+    knowledge: '',
+    keywords: [],
+    fallbacks: [
+      '这个想法有意思。是什么让你这么判断的？',
+      '如果只给你一个证据，你会选哪一个？为什么？',
+      '有没有一种情况，会让你的结论不成立？',
+      '你能设计一个小实验或找一条材料来验证吗？',
+      '换个角度：如果条件变了，结论还成立吗？',
+      '用一句话说：你的结论是什么？证据是什么？'
+    ],
+    closing: '轮次到了。请用一句话回答核心问题，并给出你的证据。',
+    forbidden: [],
+    transfer: [],
+    chips: ['不知道', '直接告诉我答案', '我猜……'],
+    answerHint: '不直接给。提示：回到你观察到的第一个现象。'
+  }
+};
+
+/* ==========================================================================
+   2. 状态
+   ========================================================================== */
+const state = {
+  scenarioId: 'chem',
+  turns: [],
+  ended: false,
+  blocked: 0,
+  askAnswer: 0,
+  startedAt: null,
+  endedAt: null,
+  group: '1',
+  groupSize: 4,
+  className: '',
+  maxTurns: 6,
+  retell: '',
+  transferAnswers: {},
+  transferScore: null,
+  mode: 'demo',
+  api: { base: '', model: '', key: '' },
+  timer: { total: 900, remaining: 900, running: false, id: null },
+  demoPlaying: false,
+  demoTimeouts: [],
+  custom: { driving: '', knowledge: '' },
+  settings: { projector: false, teachMinutes: 10 }
+};
+
+const LS_KEY = 'aot.settings.v1';
+
+/* ==========================================================================
+   3. DOM
+   ========================================================================== */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const chatEl = $('#chat');
+const inputEl = $('#input');
+const sendBtn = $('#sendBtn');
+const quickEl = $('#quickChips');
+const scenarioSelect = $('#scenarioSelect');
+const modePill = $('#modePill');
+const timerBtn = $('#timerBtn');
+const turnHint = $('#turnHint');
+const timerHint = $('#timerHint');
+const panel = $('#panel');
+const settingsDialog = $('#settingsDialog');
+
+/* ==========================================================================
+   4. 初始化
+   ========================================================================== */
+function init() {
+  loadSettings();
+  Object.values(SCENARIOS).forEach(sc => {
+    const opt = document.createElement('option');
+    opt.value = sc.id;
+    opt.textContent = sc.label;
+    scenarioSelect.appendChild(opt);
+  });
+  scenarioSelect.value = state.scenarioId;
+  scenarioSelect.addEventListener('change', () => {
+    const next = scenarioSelect.value;
+    if (state.turns.length > 1 && !confirm('切换场景会清空当前课堂记录，确定继续？')) {
+      scenarioSelect.value = state.scenarioId;
+      return;
+    }
+    applyScenario(next);
+  });
+
+  bindEvents();
+  applyScenario(state.scenarioId);
+  renderSettingsFields();
+  renderAll();
+}
+
+function bindEvents() {
+  $('#settingsForm').addEventListener('submit', e => e.preventDefault());
+  sendBtn.addEventListener('click', send);
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  inputEl.addEventListener('input', autoGrow);
+  $('#demoBtn').addEventListener('click', playDemo);
+  $('#restartBtn').addEventListener('click', () => {
+    if (state.turns.length > 1 && !confirm('重新开始会清空当前课堂记录，确定吗？')) return;
+    restartSession();
+  });
+  $('#timerBtn').addEventListener('click', toggleTimer);
+  $('#projectorBtn').addEventListener('click', toggleProjector);
+  $('#panelBtn').addEventListener('click', () => panel.classList.toggle('open'));
+  $('#panelClose').addEventListener('click', () => panel.classList.remove('open'));
+  $('#settingsBtn').addEventListener('click', openSettings);
+  $('#saveSettings').addEventListener('click', saveSettingsFromForm);
+  $('#testApiBtn').addEventListener('click', testApi);
+  $('#gradeBtn').addEventListener('click', gradeTransfer);
+  $('#copyMdBtn').addEventListener('click', () => copyText(buildMarkdown(), 'Markdown 已复制'));
+  $('#copyPromptBtn').addEventListener('click', () => copyText(buildSystemPrompt(), '提示词已复制'));
+  $('#downloadMdBtn').addEventListener('click', () => downloadFile(fileBase() + '.md', buildMarkdown(), 'text/markdown;charset=utf-8'));
+  $('#downloadCsvBtn').addEventListener('click', () => downloadFile(fileBase() + '.csv', buildCSV(), 'text/csv;charset=utf-8'));
+  $('#printBtn').addEventListener('click', printRecord);
+  $('#clearBtn').addEventListener('click', () => {
+    if (!confirm('清空本节课的全部对话、指标和迁移作答？')) return;
+    restartSession();
+  });
+  $$('.tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
+  $('#teachMinutes').addEventListener('input', e => {
+    state.settings.teachMinutes = clamp(parseInt(e.target.value, 10) || 0, 0, 40);
+    saveSettings();
+  });
+  $('#retell').addEventListener('input', e => { state.retell = e.target.value; });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { panel.classList.remove('open'); if (settingsDialog.open) settingsDialog.close(); }
+  });
+  $$('input[name="mode"]').forEach(r => r.addEventListener('change', renderSettingsFields));
+  $('#setGroupSize').addEventListener('input', renderSettingsFields);
+}
+
+function applyScenario(id) {
+  state.scenarioId = id;
+  scenarioSelect.value = id;
+  clearDemoTimers();
+  state.turns = [];
+  state.ended = false;
+  state.blocked = 0;
+  state.askAnswer = 0;
+  state.startedAt = null;
+  state.endedAt = null;
+  state.transferAnswers = {};
+  state.transferScore = null;
+  state.retell = '';
+  resetTimer();
+  chatEl.innerHTML = '';
+  const sc = SCENARIOS[id];
+  $('#scSubject').textContent = sc.subject;
+  $('#scGrade').textContent = sc.grade;
+  $('#scDriving').textContent = currentDriving();
+  $('#maxTurnLabel').textContent = state.maxTurns;
+  $('#scGroup').textContent = `第 ${state.group} 组 · ${state.groupSize} 人`;
+  const retellEl = $('#retell');
+  if (retellEl) retellEl.value = '';
+  renderQuickChips();
+  renderTransfer();
+  addAIMessage(sc.intro, { intro: true });
+  updateAll();
+  saveSettings();
+  inputEl.disabled = false;
+  sendBtn.disabled = false;
+  inputEl.focus();
+}
+
+function currentDriving() {
+  if (state.scenarioId === 'custom') {
+    return state.custom.driving || '请在“设置”里填写本节课的核心问题。';
+  }
+  return SCENARIOS[state.scenarioId].driving;
+}
+
+function renderQuickChips() {
+  const sc = SCENARIOS[state.scenarioId];
+  quickEl.innerHTML = '';
+  sc.chips.forEach(text => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.addEventListener('click', () => {
+      if (state.ended || state.demoPlaying) return;
+      inputEl.value = text;
+      autoGrow();
+      send();
+    });
+    quickEl.appendChild(b);
+  });
+}
+
+/* ==========================================================================
+   5. 对话引擎
+   ========================================================================== */
+function send() {
+  if (state.ended || state.demoPlaying) return;
+  const text = inputEl.value.trim();
+  if (!text) return;
+  if (text.length > 300) { toast('学生发言请控制在 300 字以内'); return; }
+  inputEl.value = '';
+  autoGrow();
+  if (!state.timer.running && state.timer.remaining > 0) startTimer();
+  if (!state.startedAt) state.startedAt = new Date();
+
+  const tag = classify(text);
+  addStudentMessage(text, tag);
+
+  const aiCount = countAI();
+  if (aiCount >= state.maxTurns) {
+    setTimeout(endSession, 500);
+    updateAll();
+    return;
+  }
+  showTyping();
+  if (state.mode === 'api' && state.api.key && state.api.base) {
+    apiReply(text).catch(err => {
+      removeTyping();
+      demoReply(text);
+      toast('接口调用失败，已切回演示模式：' + (err.message || err));
+    });
+  } else {
+    setTimeout(() => { removeTyping(); demoReply(text); }, 420 + Math.random() * 380);
+  }
+  updateAll();
+}
+
+function classify(text) {
+  const t = text.toLowerCase();
+  if (/(答案|直接告诉|告诉我|别问|你就说|公布)/.test(t)) return '套答案';
+  if (/(不知道|不会|没看到|没注意|没思路)/.test(t)) return '卡住';
+  if (/(因为|所以|说明|证明|我猜|应该|觉得)/.test(t)) return '提出假设';
+  if (/(看到|观察|水珠|气泡|颜色|变浑|黑烟|变短|上升|下降|现象|摸到)/.test(t)) return '事实描述';
+  return '其他';
+}
+
+function countAI() {
+  return state.turns.filter(t => t.role === 'ai' && !t.closing && !t.intro).length;
+}
+
+function demoReply(text) {
+  if (state.ended) return;
+  const sc = SCENARIOS[state.scenarioId];
+  const aiCount = countAI();
+  if (aiCount >= state.maxTurns) { endSession(); return; }
+
+  const normalized = text.toLowerCase();
+  let reply = '';
+  if (classify(text) === '套答案') {
+    reply = sc.answerHint;
+  } else {
+    for (const [keys, r] of sc.keywords) {
+      if (keys.some(k => normalized.includes(k.toLowerCase()))) { reply = r; break; }
+    }
+  }
+  if (!reply) {
+    reply = sc.fallbacks[Math.min(aiCount, sc.fallbacks.length - 1)];
+  }
+  if (!/[？?]$/.test(reply)) reply = reply.replace(/[。！!]$/, '') + '。你怎么证明？';
+  addAIMessage(reply);
+  updateAll();
+}
+
+function addAIMessage(text, opts = {}) {
+  const t = {
+    role: 'ai', text, time: new Date(),
+    n: countAI() + 1, closing: !!opts.closing, intro: !!opts.intro
+  };
+  state.turns.push(t);
+  renderMessage(t);
+  updateAll();
+}
+
+function addStudentMessage(text, tag) {
+  const t = { role: 'student', text, tag, time: new Date(), star: false };
+  state.turns.push(t);
+  if (tag === '套答案') state.askAnswer++;
+  renderMessage(t);
+  updateAll();
+}
+
+function renderMessage(t) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + t.role;
+  if (t.role === 'ai') {
+    el.innerHTML = '<div class="avatar" aria-hidden="true">问</div>' +
+      '<div class="bubble-wrap"><div class="msg-meta"><span>AI 助教</span>' +
+      (t.closing ? '<span class="chip end">收束</span>' : (t.intro ? '<span class="chip">开场</span>' : '<span class="chip">第 ' + t.n + ' 问</span>')) +
+      '</div><div class="bubble"></div></div>';
+    el.querySelector('.bubble').textContent = t.text;
+  } else {
+    el.innerHTML = '<div class="bubble-wrap"><div class="msg-meta">' +
+      '<span class="tag t-' + t.tag + '">' + t.tag + '</span>' +
+      '</div><div class="bubble"></div></div><div class="avatar" aria-hidden="true">学</div>';
+    el.querySelector('.bubble').textContent = t.text;
+  }
+  chatEl.appendChild(el);
+  scrollChat();
+}
+
+function showTyping() {
+  removeTyping();
+  const el = document.createElement('div');
+  el.className = 'msg ai typing';
+  el.id = 'typing';
+  el.innerHTML = '<div class="avatar" aria-hidden="true">问</div><div class="bubble"><span></span><span></span><span></span></div>';
+  chatEl.appendChild(el);
+  scrollChat();
+}
+function removeTyping() { const el = $('#typing'); if (el) el.remove(); }
+function scrollChat() { chatEl.scrollTop = chatEl.scrollHeight; }
+
+function endSession() {
+  if (state.ended) return;
+  removeTyping();
+  state.ended = true;
+  state.endedAt = new Date();
+  stopTimer();
+  const sc = SCENARIOS[state.scenarioId];
+  const closing = sc.closing.replace(/^\d+ 轮/, state.maxTurns + ' 轮');
+  addAIMessage(closing, { closing: true });
+  inputEl.disabled = true;
+  sendBtn.disabled = true;
+  inputEl.placeholder = '对话已结束，请到“迁移”标签完成检测';
+  turnHint.textContent = '对话已结束 · 去做迁移检测';
+  toast('对话结束：让学生写下“我原来怎么想 / 现在怎么想”');
+  updateAll();
+}
+
+/* ==========================================================================
+   6. 大模型接口（OpenAI 兼容）
+   ========================================================================== */
+async function callAPI(history) {
+  const base = state.api.base.replace(/\/+$/, '');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetch(base + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.api.key },
+      body: JSON.stringify({
+        model: state.api.model,
+        messages: [{ role: 'system', content: buildSystemPrompt() }, ...history],
+        temperature: 0.4,
+        max_tokens: 260
+      }),
+      signal: controller.signal
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error('HTTP ' + res.status + (txt ? ' ' + txt.slice(0, 80) : ''));
+    }
+    const data = await res.json();
+    const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!content) throw new Error('返回为空');
+    return guard(String(content));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function apiReply() {
+  const history = state.turns
+    .filter(t => (t.role === 'ai' && !t.closing) || t.role === 'student')
+    .slice(-10)
+    .map(t => ({ role: t.role === 'ai' ? 'assistant' : 'user', content: t.text }));
+  const reply = await callAPI(history);
+  addAIMessage(reply);
+  updateAll();
+}
+
+function guard(text) {
+  const sc = SCENARIOS[state.scenarioId];
+  let out = text.trim();
+  if (sc.forbidden.some(re => re.test(out))) {
+    state.blocked++;
+    out = '我先不给结论。回到证据：你刚才提到的现象里，哪一条最能支持你的判断？';
+  }
+  if (out.length > 150) out = out.slice(0, 148) + '…';
+  if (!/[？?]/.test(out)) out = out.replace(/[。！!]$/, '') + '。你怎么证明？';
+  return out;
+}
+
+function buildSystemPrompt() {
+  const sc = SCENARIOS[state.scenarioId];
+  const knowledge = state.scenarioId === 'custom'
+    ? (state.custom.knowledge || '（教师未填写）')
+    : sc.knowledge;
+  return [
+    '你是「只问不答」课堂 AI 助教，服务对象是' + sc.subject + '学生。',
+    '本节课的核心问题：' + currentDriving(),
+    '必须遵守的规则：',
+    '1. 绝不直接说出结论、答案、公式或完整解释。',
+    '2. 每次回复只提一个问题（最多追问两个小问），总字数不超过 80 字。',
+    '3. 学生答错时，先复述其观点，再给一个更小的提示或观察任务。',
+    '4. 学生索要答案时，明确拒绝，并给一个不泄露结论的提示。',
+    '5. 不编造实验数据；不确定时让学生回到观察、材料或教材。',
+    '6. 用学生能听懂的口语，不要客套，不要表扬性结束。',
+    '7. 即使学生说出正确结论，也要追问“你怎么证明”。',
+    '8. 参考知识只用于判断学生是否接近结论，不得直接输出：',
+    knowledge
+  ].join('\n');
+}
+
+async function testApi() {
+  const status = $('#apiStatus');
+  const base = $('#setBase').value.trim().replace(/\/+$/, '');
+  const model = $('#setModel').value.trim();
+  const key = $('#setKey').value.trim();
+  if (!base || !model || !key) { status.textContent = '请先填写 Base URL、模型名和 Key'; return; }
+  status.textContent = '正在测试…';
+  try {
+    const res = await fetch(base + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: '只回复两个字：成功' }], max_tokens: 10 })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    status.textContent = txt ? '连接成功：' + String(txt).slice(0, 20) : '已连通，但返回为空';
+  } catch (err) {
+    status.textContent = '失败：' + (err.message || err) + '（检查 CORS / Key / Base URL）';
+  }
+}
+
+/* ==========================================================================
+   7. 教师面板
+   ========================================================================== */
+function switchTab(name) {
+  $$('.tab').forEach(t => {
+    const on = t.dataset.tab === name;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  $$('.pane').forEach(p => p.classList.toggle('active', p.dataset.pane === name));
+  if (name === 'export') renderExport();
+  if (name === 'record') renderRecord();
+  if (name === 'transfer') renderTransfer();
+}
+
+function updateAll() {
+  updateMetrics();
+  updateTurnHint();
+  renderRecord();
+  updateAdvice();
+  renderExportSoon();
+  updateModePill();
+}
+
+function updateModePill() {
+  if (state.mode === 'api' && state.api.key && state.api.base) {
+    modePill.textContent = '大模型';
+    modePill.classList.add('api');
+  } else {
+    modePill.textContent = '演示模式';
+    modePill.classList.remove('api');
+  }
+}
+
+function updateTurnHint() {
+  const n = countAI();
+  if (!state.ended) {
+    turnHint.textContent = '第 ' + n + ' / ' + state.maxTurns + ' 问';
+  }
+  $('#maxTurnLabel').textContent = state.maxTurns;
+  $('#scGroup').textContent = `第 ${state.group} 组 · ${state.groupSize} 人`;
+}
+
+function updateMetrics() {
+  const aiTurns = state.turns.filter(t => t.role === 'ai' && !t.closing && !t.intro).length;
+  $('#kpiTurns').textContent = aiTurns;
+  $('#kpiPer').textContent = (aiTurns / Math.max(1, state.groupSize)).toFixed(1);
+  $('#kpiAsk').textContent = state.askAnswer;
+  $('#kpiBlocked').textContent = state.blocked;
+
+  const counts = {};
+  TAG_LIST.forEach(t => counts[t] = 0);
+  state.turns.filter(t => t.role === 'student').forEach(t => {
+    counts[t.tag] = (counts[t.tag] || 0) + 1;
+  });
+  const max = Math.max(1, ...Object.values(counts));
+  const bars = $('#tagBars');
+  bars.innerHTML = '';
+  TAG_LIST.forEach(tag => {
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = '<span>' + tag + '</span><div class="bar-track"><div class="bar-fill" style="width:' +
+      Math.round((counts[tag] / max) * 100) + '%"></div></div><span>' + counts[tag] + '</span>';
+    bars.appendChild(row);
+  });
+}
+
+function updateAdvice() {
+  const counts = {};
+  state.turns.filter(t => t.role === 'student').forEach(t => { counts[t.tag] = (counts[t.tag] || 0) + 1; });
+  const aiTurns = state.turns.filter(t => t.role === 'ai' && !t.closing && !t.intro).length;
+  let advice = '先让学生开口。第一个问题只问“你看到了什么”，不问“为什么”。';
+  if (state.askAnswer >= 1) advice = '套答案请求已出现 ' + state.askAnswer + ' 次。先别解释，改问“你看到了什么”，把学生拉回证据。';
+  else if ((counts['卡住'] || 0) >= 2) advice = '“卡住”出现 ' + counts['卡住'] + ' 次。给一个观察任务（回看视频 / 摸杯壁），不要再追问“为什么”。';
+  else if (aiTurns >= state.maxTurns - 1 && !state.ended) advice = '接近轮次上限：准备收束，让每个学生用一句话说“结论 + 证据”。';
+  else if ((counts['提出假设'] || 0) >= 2) advice = '学生开始提出假设了。下一步只问“你怎么证明”，不要评价对错。';
+  else if (state.ended) advice = '对话已结束。请完成复述与迁移检测，再导出课堂记录。';
+  $('#advice').textContent = advice;
+}
+
+function renderRecord() {
+  const list = $('#recordList');
+  list.innerHTML = '';
+  const students = state.turns.filter(t => t.role === 'student');
+  $('#recordCount').textContent = students.length ? '（' + students.length + ' 条学生发言）' : '';
+  if (!state.turns.length) {
+    list.innerHTML = '<p class="muted small">还没有记录。</p>';
+    return;
+  }
+  state.turns.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'rec ' + t.role;
+    const role = document.createElement('span');
+    role.className = 'rec-role';
+    role.textContent = t.role === 'ai' ? (t.closing ? '收束' : 'AI') : '学生';
+    const body = document.createElement('div');
+    body.className = 'rec-body';
+    const text = document.createElement('div');
+    text.className = 'rec-text';
+    text.textContent = t.text;
+    const meta = document.createElement('div');
+    meta.className = 'rec-meta';
+    meta.textContent = (t.tag ? t.tag + ' · ' : '') + timeShort(t.time);
+    body.appendChild(text);
+    body.appendChild(meta);
+    row.appendChild(role);
+    row.appendChild(body);
+    if (t.role === 'student') {
+      const star = document.createElement('button');
+      star.className = 'star' + (t.star ? ' on' : '');
+      star.textContent = '★';
+      star.title = '标记为关键证据';
+      star.addEventListener('click', () => {
+        t.star = !t.star;
+        star.classList.toggle('on', t.star);
+        renderExportSoon();
+      });
+      row.appendChild(star);
+    }
+    list.appendChild(row);
+  });
+}
+
+function renderTransfer() {
+  const sc = SCENARIOS[state.scenarioId];
+  const list = $('#transferList');
+  const count = $('#transferCount');
+  const btn = $('#gradeBtn');
+  list.innerHTML = '';
+  $('#transferResult').hidden = true;
+  if (!sc.transfer.length) {
+    count.textContent = '';
+    list.innerHTML = '<p class="muted small">本场景未配置迁移题。切换到化学 / 物理 / 数学 / 语文场景可体验。</p>';
+    btn.disabled = true;
+    return;
+  }
+  btn.disabled = false;
+  count.textContent = '（' + sc.transfer.length + ' 题）';
+  sc.transfer.forEach((q, qi) => {
+    const card = document.createElement('div');
+    card.className = 'q-card';
+    const title = document.createElement('div');
+    title.className = 'q-title';
+    title.innerHTML = '<span class="qno">Q' + (qi + 1) + '</span>';
+    title.appendChild(document.createTextNode(q.q));
+    card.appendChild(title);
+    q.options.forEach((opt, oi) => {
+      const label = document.createElement('label');
+      label.className = 'q-opt';
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'tq' + qi;
+      input.value = oi;
+      if (state.transferAnswers[qi] === oi) input.checked = true;
+      input.addEventListener('change', () => { state.transferAnswers[qi] = oi; });
+      const span = document.createElement('span');
+      span.textContent = String.fromCharCode(65 + oi) + '. ' + opt;
+      label.appendChild(input);
+      label.appendChild(span);
+      card.appendChild(label);
+    });
+    list.appendChild(card);
+  });
+  if (state.transferScore !== null) showTransferResult();
+}
+
+function gradeTransfer() {
+  const sc = SCENARIOS[state.scenarioId];
+  if (!sc.transfer.length) return;
+  const unanswered = sc.transfer.some((q, qi) => state.transferAnswers[qi] === undefined);
+  if (unanswered) { toast('还有题目没有作答'); return; }
+  let correct = 0;
+  sc.transfer.forEach((q, qi) => {
+    if (state.transferAnswers[qi] === q.answer) correct++;
+  });
+  state.transferScore = correct;
+  showTransferResult();
+  renderExportSoon();
+}
+
+function showTransferResult() {
+  const sc = SCENARIOS[state.scenarioId];
+  const box = $('#transferResult');
+  box.hidden = false;
+  box.textContent = '得分：' + state.transferScore + ' / ' + sc.transfer.length + '　' +
+    (state.transferScore === sc.transfer.length ? '全部正确，可以进入下一题组。' : '回看错题，让学生说清“为什么”。');
+  const cards = $$('.q-card');
+  sc.transfer.forEach((q, qi) => {
+    const card = cards[qi];
+    if (!card) return;
+    $$('.q-opt', card).forEach((label, oi) => {
+      label.classList.remove('correct', 'wrong');
+      if (oi === q.answer) label.classList.add('correct');
+      else if (state.transferAnswers[qi] === oi) label.classList.add('wrong');
+    });
+    let ex = $('.q-explain', card);
+    if (!ex) {
+      ex = document.createElement('div');
+      ex.className = 'q-explain';
+      card.appendChild(ex);
+    }
+    ex.textContent = '正确答案：' + String.fromCharCode(65 + q.answer) + '。' + q.explain;
+  });
+}
+
+/* ==========================================================================
+   8. 导出
+   ========================================================================== */
+let exportTimer = null;
+function renderExportSoon() {
+  clearTimeout(exportTimer);
+  exportTimer = setTimeout(renderExport, 250);
+}
+
+function renderExport() {
+  if (!$('#exportPreview')) return;
+  $('#exportPreview').textContent = buildMarkdown();
+  $('#promptPreview').textContent = buildSystemPrompt();
+}
+
+function fileBase() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return '只问不答-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + '-' + state.scenarioId;
+}
+
+function buildMarkdown() {
+  const sc = SCENARIOS[state.scenarioId];
+  const d = new Date();
+  const lines = [];
+  lines.push('# 只问不答 · 课堂记录');
+  lines.push('');
+  lines.push('- 日期：' + d.toLocaleString('zh-CN', { hour12: false }));
+  lines.push('- 场景：' + sc.label + '（' + state.scenarioId + '）');
+  lines.push('- 班级 / 小组：' + (state.className || '未填写') + ' / 第 ' + state.group + ' 组（' + state.groupSize + ' 人）');
+  lines.push('- 模式：' + (state.mode === 'api' && state.api.key ? '接入大模型' : '演示模式'));
+  lines.push('- 计时：' + fmtTime(state.timer.total - state.timer.remaining) + ' / ' + fmtTime(state.timer.total));
+  lines.push('');
+  lines.push('## 核心问题');
+  lines.push('');
+  lines.push(currentDriving());
+  lines.push('');
+  lines.push('## 课堂对话');
+  lines.push('');
+  state.turns.forEach((t, i) => {
+    const who = t.role === 'ai' ? 'AI' : '学生';
+    const tag = t.tag ? '（' + t.tag + (t.star ? '·关键证据' : '') + '）' : '';
+    lines.push((i + 1) + '. **' + who + tag + '**：' + t.text);
+  });
+  lines.push('');
+  lines.push('## 课堂指标');
+  lines.push('');
+  lines.push('| 指标 | 数值 |');
+  lines.push('| --- | --- |');
+  lines.push('| AI 提问轮次 | ' + countAI() + ' / ' + state.maxTurns + ' |');
+  lines.push('| 人均提问轮次 | ' + (countAI() / Math.max(1, state.groupSize)).toFixed(1) + ' |');
+  lines.push('| 套答案请求 | ' + state.askAnswer + ' |');
+  lines.push('| 已拦截给答案 | ' + state.blocked + ' |');
+  lines.push('| 学生发言条数 | ' + state.turns.filter(t => t.role === 'student').length + ' |');
+  lines.push('| 教师讲授时长 | ' + state.settings.teachMinutes + ' 分钟（自报） |');
+  lines.push('');
+  lines.push('## 学生复述');
+  lines.push('');
+  lines.push(state.retell.trim() || '（未填写）');
+  lines.push('');
+  lines.push('## 迁移检测');
+  lines.push('');
+  if (state.transferScore === null) {
+    lines.push('（未批改）');
+  } else {
+    lines.push('得分：' + state.transferScore + ' / ' + sc.transfer.length);
+    lines.push('');
+    sc.transfer.forEach((q, qi) => {
+      const picked = state.transferAnswers[qi];
+      const ok = picked === q.answer;
+      lines.push((qi + 1) + '. ' + q.q);
+      lines.push('   - 作答：' + (picked === undefined ? '未答' : String.fromCharCode(65 + picked)) + '　' + (ok ? '✔' : '✘') + '　正确答案：' + String.fromCharCode(65 + q.answer));
+    });
+  }
+  lines.push('');
+  lines.push('## 系统提示词');
+  lines.push('');
+  lines.push('```text');
+  lines.push(buildSystemPrompt());
+  lines.push('```');
+  return lines.join('\n');
+}
+
+function buildCSV() {
+  const rows = [['序号', '角色', '内容', '标签', '时间', '关键证据']];
+  state.turns.forEach((t, i) => {
+    rows.push([
+      i + 1,
+      t.role === 'ai' ? 'AI' : '学生',
+      t.text,
+      t.tag || '',
+      t.time.toLocaleTimeString('zh-CN', { hour12: false }),
+      t.star ? '是' : ''
+    ]);
+  });
+  const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
+  return '\ufeff' + rows.map(r => r.map(esc).join(',')).join('\r\n');
+}
+
+function downloadFile(name, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1200);
+  toast('已下载：' + name);
+}
+
+function copyText(text, okMsg) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast(okMsg)).catch(() => fallbackCopy(text, okMsg));
+  } else {
+    fallbackCopy(text, okMsg);
+  }
+}
+function fallbackCopy(text, okMsg) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); toast(okMsg); } catch (e) { toast('复制失败，请手动选择文本'); }
+  ta.remove();
+}
+
+function printRecord() {
+  const sc = SCENARIOS[state.scenarioId];
+  const d = new Date();
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const turns = state.turns.map((t, i) =>
+    '<div class="turn"><b>' + (t.role === 'ai' ? 'AI' : '学生') + '</b>' + esc(t.text) +
+    (t.tag ? ' <small>［' + t.tag + (t.star ? '·关键证据' : '') + '］</small>' : '') + '</div>'
+  ).join('');
+  const transfer = state.transferScore === null ? '<p>（未批改）</p>' :
+    '<p>得分：' + state.transferScore + ' / ' + sc.transfer.length + '</p>' +
+    sc.transfer.map((q, qi) => '<div class="turn"><b>Q' + (qi + 1) + '</b>' + esc(q.q) + '<br><small>作答：' +
+      (state.transferAnswers[qi] === undefined ? '未答' : String.fromCharCode(65 + state.transferAnswers[qi])) +
+      '　正确答案：' + String.fromCharCode(65 + q.answer) + '。' + esc(q.explain) + '</small></div>').join('');
+  $('#printDoc').innerHTML =
+    '<h1>只问不答 · 课堂记录</h1>' +
+    '<p class="meta">' + d.toLocaleString('zh-CN', { hour12: false }) + '　|　' + esc(sc.label) + '　|　' +
+    esc(state.className || '未填写班级') + ' / 第 ' + state.group + ' 组（' + state.groupSize + ' 人）　|　' +
+    (state.mode === 'api' && state.api.key ? '接入大模型' : '演示模式') + '</p>' +
+    '<h2>核心问题</h2><p>' + esc(currentDriving()) + '</p>' +
+    '<h2>课堂对话</h2>' + turns +
+    '<h2>课堂指标</h2><table><tr><th>指标</th><th>数值</th></tr>' +
+    '<tr><td>AI 提问轮次</td><td>' + countAI() + ' / ' + state.maxTurns + '</td></tr>' +
+    '<tr><td>人均提问轮次</td><td>' + (countAI() / Math.max(1, state.groupSize)).toFixed(1) + '</td></tr>' +
+    '<tr><td>套答案请求</td><td>' + state.askAnswer + '</td></tr>' +
+    '<tr><td>已拦截给答案</td><td>' + state.blocked + '</td></tr>' +
+    '<tr><td>教师讲授时长</td><td>' + state.settings.teachMinutes + ' 分钟（自报）</td></tr></table>' +
+    '<h2>学生复述</h2><p>' + esc(state.retell || '（未填写）') + '</p>' +
+    '<h2>迁移检测</h2>' + transfer +
+    '<h2>系统提示词</h2><div class="prompt">' + esc(buildSystemPrompt()) + '</div>';
+  window.print();
+}
+
+/* ==========================================================================
+   9. 设置
+   ========================================================================== */
+function openSettings() {
+  $('#setGroup').value = state.group;
+  $('#setGroupSize').value = state.groupSize;
+  $('#setClass').value = state.className;
+  $('#setMaxTurns').value = state.maxTurns;
+  $('#setTimer').value = Math.round(state.timer.total / 60);
+  $('#setBase').value = state.api.base;
+  $('#setModel').value = state.api.model;
+  $('#setKey').value = state.api.key;
+  $('#setCustomDriving').value = state.custom.driving;
+  $('#setCustomKnowledge').value = state.custom.knowledge;
+  $$('input[name="mode"]').forEach(r => { r.checked = r.value === state.mode; });
+  $('#apiStatus').textContent = '';
+  renderSettingsFields();
+  settingsDialog.returnValue = '';
+  settingsDialog.showModal();
+}
+
+function renderSettingsFields() {
+  const isApi = $('input[name="mode"]:checked')?.value === 'api';
+  $('#apiFields').hidden = !isApi;
+  $('#customFields').hidden = state.scenarioId !== 'custom';
+}
+
+function saveSettingsFromForm() {
+  const mode = $('input[name="mode"]:checked')?.value || 'demo';
+  const base = $('#setBase').value.trim().replace(/\/+$/, '');
+  const model = $('#setModel').value.trim();
+  const key = $('#setKey').value.trim();
+  if (mode === 'api' && (!base || !model || !key)) {
+    toast('接入大模型需要填写 Base URL、模型名和 Key');
+    return;
+  }
+  state.group = $('#setGroup').value;
+  state.groupSize = clamp(parseInt($('#setGroupSize').value, 10) || 4, 1, 8);
+  state.className = $('#setClass').value.trim();
+  state.maxTurns = clamp(parseInt($('#setMaxTurns').value, 10) || 6, 3, 10);
+  const minutes = clamp(parseInt($('#setTimer').value, 10) || 15, 5, 40);
+  if (minutes * 60 !== state.timer.total) {
+    state.timer.total = minutes * 60;
+    state.timer.remaining = state.timer.total;
+    stopTimer();
+  }
+  state.mode = mode;
+  state.api = { base, model, key };
+  state.custom.driving = $('#setCustomDriving').value.trim();
+  state.custom.knowledge = $('#setCustomKnowledge').value.trim();
+  state.settings.teachMinutes = clamp(parseInt($('#teachMinutes').value, 10) || 0, 0, 40);
+  saveSettings();
+  renderTimer();
+  $('#scDriving').textContent = currentDriving();
+  updateAll();
+  if (countAI() >= state.maxTurns && !state.ended) endSession();
+  settingsDialog.close();
+  toast('设置已保存');
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    Object.assign(state, {
+      group: s.group || state.group,
+      groupSize: s.groupSize || state.groupSize,
+      className: s.className || '',
+      maxTurns: s.maxTurns || state.maxTurns,
+      mode: s.mode || 'demo',
+      api: s.api || { base: '', model: '', key: '' },
+      custom: s.custom || { driving: '', knowledge: '' },
+      settings: Object.assign({ projector: false, teachMinutes: 10 }, s.settings || {})
+    });
+    if (s.timerMinutes) { state.timer.total = s.timerMinutes * 60; state.timer.remaining = state.timer.total; }
+    if (s.scenarioId && SCENARIOS[s.scenarioId]) state.scenarioId = s.scenarioId;
+    if (state.settings.projector) document.body.classList.add('projector');
+    $('#projectorBtn').textContent = state.settings.projector ? '退出大屏' : '大屏';
+    $('#teachMinutes').value = state.settings.teachMinutes;
+  } catch (e) { /* 忽略损坏的本地设置 */ }
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      scenarioId: state.scenarioId,
+      group: state.group,
+      groupSize: state.groupSize,
+      className: state.className,
+      maxTurns: state.maxTurns,
+      timerMinutes: Math.round(state.timer.total / 60),
+      mode: state.mode,
+      api: state.api,
+      custom: state.custom,
+      settings: state.settings
+    }));
+  } catch (e) { /* 隐私模式可能禁用 localStorage */ }
+}
+
+/* ==========================================================================
+   10. 计时 / 大屏 / 示例
+   ========================================================================== */
+function resetTimer() {
+  stopTimer();
+  state.timer.remaining = state.timer.total;
+  renderTimer();
+}
+function toggleTimer() {
+  if (state.ended) return;
+  if (state.timer.running) stopTimer();
+  else startTimer();
+}
+function startTimer() {
+  if (state.timer.running || state.timer.remaining <= 0) return;
+  state.timer.running = true;
+  state.timer.id = setInterval(() => {
+    state.timer.remaining--;
+    renderTimer();
+    if (state.timer.remaining <= 0) {
+      stopTimer();
+      toast('时间到：进入复述与迁移环节');
+      endSession();
+    }
+  }, 1000);
+  renderTimer();
+}
+function stopTimer() {
+  state.timer.running = false;
+  if (state.timer.id) clearInterval(state.timer.id);
+  state.timer.id = null;
+  renderTimer();
+}
+function renderTimer() {
+  const left = Math.max(0, state.timer.remaining);
+  timerBtn.textContent = fmtTime(left);
+  timerBtn.classList.toggle('low', left <= 60 && left > 0);
+  timerHint.textContent = state.timer.running ? '计时中' : (left === state.timer.total ? '计时未开始' : '已暂停');
+  timerHint.textContent += ' · ' + fmtTime(left);
+}
+function fmtTime(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+}
+
+function toggleProjector() {
+  state.settings.projector = !state.settings.projector;
+  document.body.classList.toggle('projector', state.settings.projector);
+  $('#projectorBtn').textContent = state.settings.projector ? '退出大屏' : '大屏';
+  saveSettings();
+  setTimeout(scrollChat, 60);
+}
+
+function playDemo() {
+  if (state.demoPlaying) return;
+  if (state.turns.length > 1 && !confirm('播放示例会清空当前记录，确定吗？')) return;
+  restartSession();
+  state.demoPlaying = true;
+  inputEl.disabled = true;
+  sendBtn.disabled = true;
+  const sc = SCENARIOS[state.scenarioId];
+  const script = pickDemoScript();
+  let delay = 300;
+  script.forEach(item => {
+    delay += item.wait || 950;
+    const id = setTimeout(() => {
+      if (item.role === 'ai') addAIMessage(item.text);
+      else addStudentMessage(item.text, item.tag || classify(item.text));
+      updateAll();
+    }, delay);
+    state.demoTimeouts.push(id);
+  });
+  const end = setTimeout(() => {
+    state.demoPlaying = false;
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+    updateAll();
+  }, delay + 900);
+  state.demoTimeouts.push(end);
+}
+
+function pickDemoScript() {
+  switch (state.scenarioId) {
+    case 'chem': return [
+      { role: 'student', text: '烧杯内壁有小水珠。', tag: '事实描述', wait: 900 },
+      { role: 'ai', text: '内壁的水雾，可能来自哪里？是蜡烛本身，还是空气里的水？' },
+      { role: 'student', text: '应该是蜡烛燃烧产生的吧？', tag: '提出假设', wait: 1000 },
+      { role: 'ai', text: '先别急。如果只是蜡烛受热熔化，会有水珠出现吗？你能设计一个对照来区分吗？' },
+      { role: 'student', text: '那……用没点燃的蜡烛烤一下？', tag: '提出假设', wait: 1100 },
+      { role: 'ai', text: '这个对照不错。那另一杯澄清石灰水变浑浊，又说明了什么？' },
+      { role: 'student', text: '说明有二氧化碳。', tag: '提出假设', wait: 1000 },
+      { role: 'ai', text: '你提到了二氧化碳——你手上有什么证据能证明它，而不是别的气体？' },
+      { role: 'student', text: '直接告诉我答案吧。', tag: '套答案', wait: 950 },
+      { role: 'ai', text: '不直接给。给你一个小提示：数一数反应前后，元素种类变了吗？' }
+    ];
+    case 'phys': return [
+      { role: 'student', text: '船形排开的水更多。', tag: '事实描述', wait: 900 },
+      { role: 'ai', text: '船形时排开的水更多还是更少？这会让浮力怎么变？' },
+      { role: 'student', text: '排开越多，浮力越大。', tag: '提出假设', wait: 1000 },
+      { role: 'ai', text: '那橡皮泥的质量变了吗？为什么团状就会沉？' },
+      { role: 'student', text: '质量没变，是形状变了。', tag: '事实描述', wait: 1000 },
+      { role: 'ai', text: '形状改变了什么量？是质量变了，还是排开体积变了？' }
+    ];
+    case 'math': return [
+      { role: 'student', text: '我算出来是 6。', tag: '其他', wait: 900 },
+      { role: 'ai', text: '先别写答案。你能说清“6”表示什么吗？是 6 个 1/8，还是 6 个 3/4？' },
+      { role: 'student', text: '6 个 1/8 吧。', tag: '提出假设', wait: 1000 },
+      { role: 'ai', text: '那 3/4 里面到底有几个 1/8？画图数一数。' },
+      { role: 'student', text: '通分以后是 6/8，所以有 6 个。', tag: '提出假设', wait: 1100 },
+      { role: 'ai', text: '通分的做法和“乘倒数”的结果对得上吗？为什么？' }
+    ];
+    case 'chinese': return [
+      { role: 'student', text: '不能删，因为更准确。', tag: '提出假设', wait: 900 },
+      { role: 'ai', text: '你提到准确。这个词是在限制范围，还是在表达不确定？' },
+      { role: 'student', text: '表达不确定，作者没法精确测量。', tag: '提出假设', wait: 1000 },
+      { role: 'ai', text: '如果去掉它，作者要承担什么风险？' },
+      { role: 'student', text: '读者会以为就是精确的 605 年。', tag: '提出假设', wait: 1000 },
+      { role: 'ai', text: '你能从文中再找一个类似的词，说说它的作用吗？' }
+    ];
+    default: return [
+      { role: 'student', text: '我看到了一个现象。', tag: '事实描述', wait: 900 },
+      { role: 'ai', text: '这个现象和你的结论之间，还差哪一步证据？' },
+      { role: 'student', text: '不知道。', tag: '卡住', wait: 950 },
+      { role: 'ai', text: '那我们先做一个更小的观察：哪一个细节最反常？' }
+    ];
+  }
+}
+
+function clearDemoTimers() {
+  state.demoTimeouts.forEach(id => clearTimeout(id));
+  state.demoTimeouts = [];
+  state.demoPlaying = false;
+}
+
+function restartSession() {
+  clearDemoTimers();
+  const keep = { group: state.group, groupSize: state.groupSize, className: state.className, maxTurns: state.maxTurns, mode: state.mode, api: state.api, custom: state.custom, settings: state.settings };
+  Object.assign(state, keep);
+  applyScenario(state.scenarioId);
+  switchTab('metrics');
+  toast('已重新开始');
+}
+
+/* ==========================================================================
+   11. 工具
+   ========================================================================== */
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function timeShort(d) {
+  try { return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+  catch (e) { return ''; }
+}
+let toastTimer = null;
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+function autoGrow() {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(150, inputEl.scrollHeight) + 'px';
+}
+
+/* 启动 */
+init();
+</script>
+</body>
+</html>

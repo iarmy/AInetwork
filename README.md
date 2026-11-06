@@ -4,7 +4,7 @@
 
 ## 一、站点清单
 
-首页按三类组织，共 **10 张站点卡片**（另有 1 个同目录子站点直通入口，合计 11 个页面入口）：
+首页按三类组织，共 **11 张站点卡片**（另有 1 个同目录子站点直通入口，合计 12 个页面入口）：
 
 ### 手势互动（需要摄像头）
 
@@ -28,6 +28,7 @@
 | 10 以内加减法小游戏 | `math_game/math_game.html` | 限时口算练习 |
 | 量水游戏 | `water-measure-game/index.html` | 倒水量杯闯关，训练逻辑推理 |
 | 启点 · DeepSeek 学习诊所 | `http://127.0.0.1:5188` | 拍题识题 + 启发式追问辅导 + 一元一次方程本地诊断与错题本。**自带 Node 服务端，不是纯静态页**：先在 `qidian/` 里 `npm run dev` 再访问；DeepSeek Key 存本机 `qidian/.env`，不入库 |
+| 只问不答 · 课堂 AI 助教 | `ask-only-tutor/index.html` | 不直接给答案的苏格拉底式课堂助教：4 个内置学科场景、6 轮上限、教师指标面板、学生复述与迁移检测，记录可导出 Markdown / CSV；**纯静态、离线可用**，也可接入 OpenAI 兼容大模型 |
 
 ### 学科演示
 
@@ -47,7 +48,7 @@ AInetwork/
 ├── server.py                   # 本地静态服务器
 ├── 启动导航页.command            # 双击即启动
 ├── GitHub-Pages-部署指南.md      # 部署到 GitHub Pages + 自有域名的教程
-├── previews/                   # 首页 10 张卡片的站点截图
+├── previews/                   # 首页 11 张卡片的站点截图
 ├── tools/
 │   ├── verify.sh               # 一键自检（逻辑 + 断链 + HTTP + 运行时）
 │   ├── test-logic.js           # 首页筛选 / 出题算法 的逻辑测试（node，无需浏览器）
@@ -55,6 +56,7 @@ AInetwork/
 │   ├── make-cdp-cover.js       # 用 CDP 控制浏览器后截图（数独棋盘 / 课堂反馈票数）
 │   ├── check-links.py          # 全站断链扫描
 │   └── make-previews.sh        # 重新生成 previews/ 截图（内部会调用上面那个脚本）
+├── ask-only-tutor/             # 只问不答 · 课堂 AI 助教（纯静态单页）
 ├── dianming/                   # 课堂点名
 ├── gesture/
 │   ├── gesture-demo/           # 空中画函数

@@ -494,10 +494,10 @@ footer code {
     <div class="chips" role="group" aria-label="按分类筛选">
       <button class="chip" data-cat="all" aria-pressed="true">全部<span class="n">10</span></button>
       <button class="chip" data-cat="gesture" aria-pressed="false">手势互动<span class="n">3</span></button>
-      <button class="chip" data-cat="class" aria-pressed="false">课堂工具<span class="n">4</span></button>
+      <button class="chip" data-cat="class" aria-pressed="false">课堂工具<span class="n">5</span></button>
       <button class="chip" data-cat="subject" aria-pressed="false">学科演示<span class="n">3</span></button>
     </div>
-    <span class="count" id="count">共 10 个站点</span>
+    <span class="count" id="count">共 11 个站点</span>
   </div>
 
   <!-- main 不再单独包一层 .wrap：工具条要和正文共享同一个长容器，
@@ -621,7 +621,7 @@ footer code {
         <h2>课堂工具</h2>
         <p>课堂上随手就能用的互动小工具</p>
       </div>
-      <span class="num">4 个站点</span>
+      <span class="num">5 个站点</span>
     </div>
 
     <div class="cards">
@@ -741,6 +741,35 @@ footer code {
             <div class="row">
               <span class="hint">先在本机 <b>qidian/</b> 目录运行 <b>npm run dev</b>，再点上面标题进入；纯静态托管时只有本地方程练习可用。</span>
             </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- 只问不答 · 课堂 AI 助教 -->
+      <article class="card" data-cat="class"
+               data-keywords="只问不答 苏格拉底 追问 启发式 AI 助教 提问 不给答案 课堂 教师面板 课堂记录 迁移 检测 化学 物理 数学 语文 大模型 deepseek 演示 离线">
+        <div class="cover"
+           style="--cover:linear-gradient(135deg,#0f766e,#123834)">
+          <span class="glyph" aria-hidden="true">问</span>
+          <img src="previews/ask-only-tutor.png" alt="" loading="lazy" onerror="this.hidden=true">
+          <span class="scrim" aria-hidden="true"></span>
+          <span class="kind">纯静态 · 离线可用</span>
+          <span class="go" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+          </span>
+        </div>
+        <div class="body">
+          <h3><a href="ask-only-tutor/index.html">只问不答 · 课堂 AI 助教</a></h3>
+          <p class="desc">
+            不直接给答案的课堂 AI 助教：用苏格拉底式追问把学生按在“证据”上，最多 6 轮；
+            内置化学 / 物理 / 数学 / 语文四个场景，配教师指标面板、学生复述、迁移检测，
+            课堂记录可一键导出 Markdown / CSV，也可接入 OpenAI 兼容大模型。
+          </p>
+          <div class="tags">
+            <span class="tag">零依赖</span>
+            <span class="tag local">离线演示</span>
+            <span class="tag">教师面板</span>
+            <span class="tag">可接大模型</span>
           </div>
         </div>
       </article>
