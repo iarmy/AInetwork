@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>隔空过桥 · 移项解方程</title>
+<meta name="description" content="隔空手势操作型课堂教具：用手把项搬过等号，过桥变号，实时验证等式两边仍然相等。">
+<style>
+/* ============================================================
+   隔空过桥 · 移项解方程
+   设计原则：
+   1. 零外部依赖 —— 识别引擎与模型全部本地化，断网可跑；
+   2. 投影优先 —— 卡片大、字号大、暗色高对比；
+   3. 三套输入 —— 手势 / 鼠标 / 键盘，任何一套都能上完整一节课；
+   4. 判定事件是"卡片越过等号线"这个空间事件，不要求精确落点。
+   ============================================================ */
+:root{
+  --bg:#0b1017;
+  --panel:#0f1822;
+  --panel-2:#121d29;
+  --line:rgba(148,163,184,.16);
+  --ink:#e8eef7;
+  --ink-2:#9db0c6;
+  --brand:#4dd0e1;
+  --brand-2:#7c9cff;
+  --amber:#fbbf24;
+  --green:#34d399;
+  --red:#f87171;
+  --radius:18px;
+  --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",
+         "Microsoft YaHei","Noto Sans SC","Segoe UI",Roboto,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  font-family:var(--font);
+  background:radial-gradient(1100px 620px at 50% -12%,#16263a 0%,var(--bg) 62%);
+  color:var(--ink);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit}
+
+/* ---------------- 启动层 ---------------- */
+#boot{
+  position:fixed;inset:0;z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:22px;text-align:center;padding:32px;
+  background:radial-gradient(900px 500px at 50% 35%,#17263a 0%,#0b1017 70%);
+}
+#boot h1{font-size:clamp(30px,4.4vw,52px);letter-spacing:.02em}
+#boot h1 span{color:var(--brand)}
+#boot p{color:var(--ink-2);font-size:clamp(15px,1.5vw,18px);line-height:1.9;max-width:720px}
+#boot .big{
+  margin-top:8px;padding:18px 46px;border-radius:999px;border:none;cursor:pointer;
+  font-size:clamp(18px,2vw,22px);font-weight:700;letter-spacing:.06em;
+  color:#06202a;background:linear-gradient(135deg,#7ef0ff,#4dd0e1);
+  box-shadow:0 14px 40px rgba(77,208,225,.35);
+}
+#boot .big:hover{transform:translateY(-2px);box-shadow:0 18px 48px rgba(77,208,225,.45)}
+#boot .sub{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;color:var(--ink-2);font-size:14px}
+#boot .sub a{color:var(--brand);text-decoration:none;border-bottom:1px dashed rgba(77,208,225,.4)}
+#boot.err .big{display:none}
+#boot .errbox{max-width:640px;color:#fecaca;background:rgba(248,113,113,.08);
+  border:1px solid rgba(248,113,113,.3);border-radius:14px;padding:16px 20px;
+  font-size:14px;line-height:1.8;white-space:pre-wrap;text-align:left}
+
+/* ---------------- 应用骨架 ---------------- */
+#app{height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+
+/* 顶栏 */
+.bar{
+  display:flex;align-items:center;gap:18px;padding:12px 22px;
+  border-bottom:1px solid var(--line);background:rgba(10,16,23,.72);backdrop-filter:blur(8px);
+}
+.brand{font-size:20px;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+.brand em{font-style:normal;color:var(--brand)}
+.brand small{display:block;font-size:11px;font-weight:500;color:var(--ink-2);letter-spacing:.14em}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;
+  background:var(--panel-2);border:1px solid var(--line);font-size:13px;color:var(--ink-2);
+  white-space:nowrap;
+}
+.pill b{color:var(--ink);font-size:14px}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(52,211,153,.15)}
+.pill.paused .dot{background:var(--amber);box-shadow:0 0 0 4px rgba(251,191,36,.16)}
+.pill.warn{color:var(--amber);border-color:rgba(251,191,36,.35)}
+.pill.demo{color:var(--amber);border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.08)}
+
+/* 主区 */
+main{display:grid;grid-template-columns:minmax(0,1fr) 370px;min-height:0}
+
+/* 舞台 */
+.stage{position:relative;display:flex;align-items:center;justify-content:center;
+  padding:18px 26px;overflow:hidden;min-height:0}
+.eqWrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:22px;width:100%}
+.eq{
+  display:flex;align-items:center;justify-content:center;
+  gap:clamp(12px,1.6vw,26px);
+  transition:transform .35s cubic-bezier(.2,.9,.3,1.2);
+}
+.eq.broken{transform:rotate(-1.4deg);animation:shake .45s}
+@keyframes shake{
+  0%,100%{transform:rotate(-1.4deg) translateX(0)}
+  25%{transform:rotate(-1.4deg) translateX(-9px)}
+  60%{transform:rotate(-1.4deg) translateX(7px)}
+  85%{transform:rotate(-1.4deg) translateX(-4px)}
+}
+.side{display:flex;align-items:center;gap:clamp(9px,1.3vw,20px);min-height:1.8em}
+.term{
+  position:relative;z-index:2;
+  font-size:clamp(38px,4.6vw,76px);line-height:1.22;font-weight:700;
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;
+  padding:.08em .4em;border-radius:18px;
+  background:linear-gradient(180deg,#1b2b3c,#131e2b);
+  border:1px solid rgba(77,208,225,.22);
+  box-shadow:0 10px 26px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.05);
+  user-select:none;cursor:grab;transition:transform .16s,border-color .16s,box-shadow .16s;
+}
+.term.hover{
+  transform:translateY(-5px);border-color:var(--brand);
+  box-shadow:0 0 0 3px rgba(77,208,225,.16),0 18px 36px rgba(0,0,0,.45);
+}
+.term.grabbed{
+  z-index:60;transform:scale(1.1);cursor:grabbing;
+  border-color:var(--amber);
+  box-shadow:0 0 0 4px rgba(251,191,36,.2),0 26px 54px rgba(0,0,0,.6);
+}
+.term.settle{animation:settle .5s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes settle{
+  0%{transform:scale(1.14);filter:brightness(1.9);border-color:var(--amber)}
+  100%{transform:scale(1);filter:none}
+}
+.term.frozen{cursor:default;border-color:rgba(148,163,184,.18)}
+.term .tag{
+  position:absolute;left:50%;top:-1.15em;transform:translateX(-50%);
+  font-size:12px;font-weight:600;color:var(--amber);white-space:nowrap;opacity:0;
+  transition:opacity .2s;
+}
+.term.hover .tag{opacity:1}
+.zero{font-size:clamp(38px,4.6vw,76px);font-weight:700;color:var(--ink-2)}
+
+/* 等号 / 桥 */
+.bridge{position:relative;display:flex;align-items:center;justify-content:center;
+  width:clamp(74px,8.6vw,136px);align-self:stretch}
+.bridge .rail{
+  position:absolute;top:-26%;bottom:-26%;left:50%;width:5px;transform:translateX(-50%);
+  border-radius:3px;background:linear-gradient(180deg,transparent,rgba(77,208,225,.6),transparent);
+  opacity:.28;transition:opacity .18s,box-shadow .18s;
+}
+.bridge .eqSign{
+  position:relative;font-size:clamp(40px,4.9vw,82px);line-height:1;font-weight:800;
+  color:var(--brand);text-shadow:0 0 22px rgba(77,208,225,.55);
+}
+.bridge .bridgeTag{
+  position:absolute;left:50%;top:-1.55em;transform:translateX(-50%);
+  font-size:12px;letter-spacing:.16em;color:rgba(157,176,198,.7);white-space:nowrap;
+  transition:color .18s;
+}
+.bridge.lit .bridgeTag{color:var(--amber)}
+.bridge.lit .rail{opacity:1;box-shadow:0 0 26px 7px rgba(77,208,225,.35)}
+.bridge.lit .eqSign{color:#9df1fb;text-shadow:0 0 30px rgba(77,208,225,.9)}
+.bridge.bad .eqSign{color:var(--red);text-shadow:0 0 26px rgba(248,113,113,.8)}
+
+/* 画布（手部光标） */
+#fx{position:absolute;inset:0;z-index:3;pointer-events:none}
+
+/* 提示条 */
+.hint{
+  min-height:34px;padding:7px 18px;border-radius:999px;
+  background:rgba(15,24,34,.9);border:1px solid var(--line);
+  font-size:clamp(15px,1.65vw,20px);color:var(--ink-2);text-align:center;
+  transition:color .2s,border-color .2s;
+}
+.hint b{color:var(--ink)}
+.hint.ok{color:var(--green);border-color:rgba(52,211,153,.35)}
+.hint.bad{color:var(--red);border-color:rgba(248,113,113,.35)}
+.hint.act{color:var(--amber);border-color:rgba(251,191,36,.35)}
+
+/* 挑战模式的"要不要变号"提问 */
+.prompt{
+  position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:20;
+  display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 16px;
+  max-width:calc(100% - 32px);
+  padding:11px 20px;border-radius:18px;
+  background:rgba(12,20,29,.96);border:1px solid rgba(251,191,36,.45);
+  box-shadow:0 18px 50px rgba(0,0,0,.5);
+}
+.prompt .q{font-size:clamp(14px,1.5vw,18px);font-weight:700;color:var(--amber);white-space:nowrap}
+.prompt .opts{display:flex;gap:10px}
+.prompt .opt{
+  display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:12px;
+  background:var(--panel-2);border:1px solid var(--line);
+  font-size:clamp(12.5px,1.35vw,16px);white-space:nowrap;
+}
+.prompt .opt .n{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:27px;height:27px;border-radius:50%;background:rgba(77,208,225,.16);
+  color:var(--brand);font-weight:800;font-size:15px;
+}
+.prompt .opt.focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(77,208,225,.15)}
+.prompt .tip{font-size:12px;color:var(--ink-2);white-space:nowrap}
+
+/* 完成横幅 */
+.done{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:25;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:24px 40px;border-radius:24px;text-align:center;
+  background:rgba(9,22,20,.94);border:1px solid rgba(52,211,153,.5);
+  box-shadow:0 24px 70px rgba(0,0,0,.55);
+}
+.done .big{font-size:clamp(28px,3.4vw,46px);font-weight:800;color:var(--green)}
+.done .sub{font-size:15px;color:var(--ink-2)}
+.done .row{display:flex;gap:12px;margin-top:6px}
+
+/* 右侧板书 */
+.board{
+  display:flex;flex-direction:column;min-height:0;
+  background:linear-gradient(180deg,rgba(18,29,41,.9),rgba(11,16,23,.9));
+  border-left:1px solid var(--line);
+}
+.board h2{
+  padding:16px 20px 10px;font-size:14px;letter-spacing:.18em;color:var(--ink-2);font-weight:600;
+}
+.board ol{
+  list-style:none;overflow:auto;padding:0 18px 10px;display:flex;flex-direction:column;gap:10px;
+  flex:1;min-height:0;
+}
+.board li{
+  padding:10px 14px;border-radius:14px;background:var(--panel-2);
+  border:1px solid var(--line);animation:slideIn .28s ease;
+}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.board li .step{
+  font-size:clamp(16px,1.5vw,21px);font-weight:700;line-height:1.5;
+  font-variant-numeric:tabular-nums;
+}
+.board li .note{font-size:12.5px;color:var(--ink-2);margin-top:4px;line-height:1.6}
+.board li .kind{
+  display:inline-block;margin-right:8px;padding:1px 8px;border-radius:999px;
+  font-size:11px;font-weight:700;letter-spacing:.04em;vertical-align:2px;
+}
+.board li .kind.p1{background:rgba(77,208,225,.14);color:var(--brand)}
+.board li .kind.p2{background:rgba(124,156,255,.16);color:var(--brand-2)}
+.board li .kind.err{background:rgba(248,113,113,.16);color:var(--red)}
+.board li .kind.ok{background:rgba(52,211,153,.16);color:var(--green)}
+.board li.err{border-color:rgba(248,113,113,.4)}
+.board li.ok{border-color:rgba(52,211,153,.4)}
+.board .ai{
+  margin:0 18px 12px;padding:12px 14px;border-radius:14px;
+  background:rgba(77,208,225,.07);border:1px solid rgba(77,208,225,.18);
+  font-size:13.5px;line-height:1.75;color:#bfe9f2;min-height:70px;
+}
+.board .ai b{color:var(--brand)}
+.boardFoot{
+  display:flex;align-items:center;gap:10px;padding:10px 18px;border-top:1px solid var(--line);
+  font-size:12.5px;color:var(--ink-2);
+}
+.boardFoot .stat{margin-left:auto;text-align:right;line-height:1.5}
+
+/* 底栏 */
+.foot{
+  display:flex;align-items:center;gap:16px;padding:10px 20px;
+  border-top:1px solid var(--line);background:rgba(10,16,23,.8);
+}
+.pip{
+  position:relative;width:200px;height:132px;border-radius:12px;overflow:hidden;
+  border:1px solid var(--line);background:#060a0f;flex:none;
+}
+.pip video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
+.pip canvas{width:100%;height:100%;display:block}
+.pip .tag{
+  position:absolute;left:8px;top:7px;padding:2px 8px;border-radius:999px;
+  font-size:11px;color:var(--ink-2);background:rgba(0,0,0,.5);border:1px solid var(--line);
+}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);min-width:0}
+.legend span{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
+  background:var(--panel-2);border:1px solid var(--line);white-space:nowrap}
+.legend b{color:var(--ink)}
+.legend .k{color:var(--brand);font-weight:700}
+.controls{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+.btn{
+  padding:9px 16px;border-radius:12px;cursor:pointer;
+  background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+  font-size:13.5px;font-weight:600;transition:.15s;white-space:nowrap;
+}
+.btn:hover{border-color:rgba(77,208,225,.5);background:#152433}
+.btn.primary{background:linear-gradient(135deg,#7ef0ff,#4dd0e1);color:#06202a;border:none}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{color:var(--ink-2);font-weight:500}
+.btn kbd{font-family:ui-monospace,monospace;font-size:11px;opacity:.6;margin-left:5px}
+
+/* 自检页 */
+#selftest{padding:34px;font-size:15px;line-height:1.9;overflow:auto;height:100dvh}
+#selftest h1{font-size:24px;margin-bottom:14px}
+#selftest .ok{color:var(--green)}
+#selftest .bad{color:var(--red)}
+#selftest pre{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;white-space:pre-wrap}
+
+@media (max-width:1080px){
+  main{grid-template-columns:minmax(0,1fr) 300px}
+  .pip{width:164px;height:110px}
+  .legend{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== 启动层 ==================== -->
+<div id="boot">
+  <h1>隔空<span>过桥</span> · 移项解方程</h1>
+  <p>
+    把项从等号一边搬到另一边 —— <b>搬过去，必须变号</b>。<br>
+    伸手对准卡片、握拳抓住、拖过等号线、张开手放下；<br>
+    最后一个方程若还剩系数，就<b>双手合拢</b>表示"两边同除以它"。
+  </p>
+  <button class="big" id="btnStart">允许摄像头并开始</button>
+  <div class="sub">
+    <span>没有摄像头？</span>
+    <a href="?demo=1">彩排模式（模拟手势）</a>
+    <span>·</span>
+    <a href="?selftest=1">引擎自检</a>
+  </div>
+</div>
+
+<!-- ==================== 应用 ==================== -->
+<div id="app" hidden>
+  <header class="bar">
+    <div class="brand">隔空<em>过桥</em><small>移项解方程</small></div>
+    <div class="pills">
+      <span class="pill" id="pillHand"><span class="dot"></span><span id="handText">识别到 0 只手</span></span>
+      <span class="pill" id="pillTask">第 1 / 8 题</span>
+      <span class="pill" id="pillMode">引导模式</span>
+      <span class="pill demo" id="pillDemo" hidden>彩排模式 · 模拟数据</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="stage" id="stage">
+      <div class="eqWrap">
+        <div class="eq" id="eq">
+          <div class="side" id="sideL"></div>
+          <div class="bridge" id="bridge">
+            <div class="rail"></div>
+            <div class="eqSign">=</div>
+            <div class="bridgeTag">过桥变号</div>
+          </div>
+          <div class="side" id="sideR"></div>
+        </div>
+        <div class="hint" id="hint">等待摄像头…</div>
+      </div>
+      <canvas id="fx"></canvas>
+
+      <div class="prompt" id="prompt" hidden>
+        <div class="q">过桥了，符号要变吗？</div>
+        <div class="opts">
+          <div class="opt" data-ans="1"><span class="n">1</span><span>变号（+ → −）</span></div>
+          <div class="opt" data-ans="2"><span class="n">2</span><span>不变（+ 还是 +）</span></div>
+        </div>
+        <div class="tip">比 1 根或 2 根手指，也可以按键盘 1 / 2</div>
+      </div>
+
+      <div class="done" id="done" hidden>
+        <div class="big" id="doneBig">✓ x = 6</div>
+        <div class="sub" id="doneSub">代回原方程检验一下？</div>
+        <div class="row">
+          <button class="btn primary" id="btnNext2">下一题</button>
+          <button class="btn" id="btnAgain">再做一遍</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="board">
+      <h2>解方程过程</h2>
+      <ol id="steps"></ol>
+      <div class="ai" id="ai"><b>AI</b> 把左边的常数搬到右边试试。</div>
+      <div class="boardFoot">
+        <button class="btn ghost" id="btnExport">导出记录</button>
+        <div class="stat" id="stat">完成 0 题 · 用时 0:00 · 错误 0 次</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    <div class="pip">
+      <video id="video" playsinline muted></video>
+      <canvas id="skel" width="400" height="264"></canvas>
+      <span class="tag">摄像头预览</span>
+    </div>
+    <div class="legend">
+      <span><b>✊ 握拳</b> 抓住</span>
+      <span><b>🖐 张开</b> 放下</span>
+      <span><b>过桥</b> 变号</span>
+      <span><b>🙌 双手合拢</b> 两边同除</span>
+      <span><span class="k">鼠标</span> 点一下卡片再点另一边</span>
+    </div>
+    <div class="controls">
+      <button class="btn" id="btnUndo">撤销 <kbd>Z</kbd></button>
+      <button class="btn" id="btnReset">重来 <kbd>R</kbd></button>
+      <button class="btn" id="btnNext">下一题 <kbd>N</kbd></button>
+      <button class="btn" id="btnMode">换成挑战模式</button>
+      <button class="btn" id="btnDivide" hidden>双手合拢同除</button>
+      <button class="btn ghost" id="btnFull">全屏 <kbd>F</kbd></button>
+    </div>
+  </footer>
+</div>
+
+<div id="selftest" hidden></div>
+
+<script type="module">
+import { FilesetResolver, HandLandmarker } from './lib/vision_bundle.js';
+
+/* ============================================================
+   0. 常量与工具
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const params = new URLSearchParams(location.search);
+const DEMO = params.has('demo');
+const SELFTEST = params.has('selftest');
+const AUTOTEST = params.has('autotest');
+const SHOT = params.has('shot');
+let fakeNow = 0;
+const clock = () => (AUTOTEST ? fakeNow : performance.now());
+
+const CONFIG = {
+  MODEL_URL: './model/hand_landmarker.task',
+  WASM_URL: './lib/wasm',
+  MAX_HANDS: 2,
+
+  // 手势
+  OPEN_FINGERS: 4,        // 五指张开（只数四指）算"松手"
+  FIST_FRAMES: 4,         // 握拳连续多少帧才真正"抓取"
+  OPEN_FRAMES: 4,         // 张开连续多少帧才真正"放下"
+  HOVER_PAD: 12,          // 卡片命中判定的外扩像素（大目标，容错）
+  COOLDOWN_MS: 520,       // 放下后多久内不许再抓
+  LOST_MS: 320,           // 抓取中丢手多久后自动取消
+  CURSOR_GAIN: 1.18,      // 手在画面里的移动放大到屏幕的比例
+  SMOOTH: 0.34,           // 光标平滑系数（越小越稳、越滞后）
+  MIN_HAND_SIZE: 0.045,   // 画面里手太小时提示靠近一点
+
+  // 双手合拢
+  TWO_HAND_GAP: 0.16,     // 两掌心距 < 舞台短边 16% 算"合拢"
+  TWO_HAND_FAR: 0.30,     // 之前必须拉开到 30% 以上，避免误触
+  TWO_HAND_HOLD_MS: 460,
+
+  // 挑战模式
+  SIGN_FRAMES: 5,
+  SIGN_TIMEOUT_MS: 12000,
+};
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const MINUS = '−';
+const fmt = n => (n < 0 ? MINUS + Math.abs(n) : String(n));
+
+/* ============================================================
+   1. 方程引擎（纯函数，可被 ?selftest=1 直接测）
+   ------------------------------------------------------------
+   一个"项" = { id, coef, v }：
+     coef 带符号整数；v=true 表示 x 项，false 表示常数项。
+   方程 = { left:[term…], right:[term…] }。
+   移项 = 换边 + 变号；判等 = 多个 x 采样点上左右两边之差是否一致。
+   ============================================================ */
+let termSeq = 0;
+const mkTerm = (coef, v) => ({ id: 't' + (++termSeq), coef, v: !!v });
+
+function termText(t, isFirst, spaced) {
+  let body;
+  if (t.v) {
+    const a = Math.abs(t.coef);
+    body = (a === 1 ? '' : String(a)) + 'x';
+  } else {
+    body = String(Math.abs(t.coef));
+  }
+  const sign = t.coef < 0 ? MINUS : (isFirst ? '' : '+');
+  if (isFirst) return sign + body;
+  return sign + (spaced ? ' ' : '') + body;
+}
+
+function sideText(list) {
+  if (!list.length) return '0';
+  return list.map((t, i) => termText(t, i === 0, true)).join(' ');
+}
+function eqText(eq) {
+  return sideText(eq.left) + ' = ' + sideText(eq.right);
+}
+
+/* 一元一次方程：变量项排前面、常数项排后面，同类项合并 */
+function normalizeSide(list) {
+  const out = [];
+  let merged = false;
+  for (const t of list) {
+    const hit = out.find(o => o.v === t.v);
+    if (hit) { hit.coef += t.coef; merged = true; }
+    else out.push({ ...t });
+  }
+  return { side: out.filter(t => t.coef !== 0), merged };
+}
+function normalizeEq(eq) {
+  const L = normalizeSide(eq.left), R = normalizeSide(eq.right);
+  const sort = l => l.slice().sort((a, b) => (b.v ? 1 : 0) - (a.v ? 1 : 0));
+  return { left: sort(L.side), right: sort(R.side), merged: L.merged || R.merged };
+}
+
+/* 移项：把 termId 从原边搬到 toSide，flip=true 时变号 */
+function moveTerm(eq, termId, toSide, flip) {
+  const fromSide = eq.left.some(t => t.id === termId) ? 'left'
+                 : eq.right.some(t => t.id === termId) ? 'right' : null;
+  if (!fromSide || fromSide === toSide) return null;
+  const term = eq[fromSide].find(t => t.id === termId);
+  const fromList = eq[fromSide].filter(t => t.id !== termId);
+  const toList = [...eq[toSide], { ...term, id: 't' + (++termSeq), coef: flip ? -term.coef : term.coef }];
+  const raw = fromSide === 'left'
+    ? { left: fromList, right: toList }
+    : { left: toList, right: fromList };
+  return normalizeEq(raw);
+}
+
+const SAMPLES = [0.7, -1.3, 2.4, 5.5, -3.8];
+function evalSide(list, x) {
+  return list.reduce((s, t) => s + t.coef * (t.v ? x : 1), 0);
+}
+/* 两个方程是否等价：左右两边之差关于 x 是同一个一次函数 */
+function isEquivalent(a, b) {
+  for (const x of SAMPLES) {
+    const da = evalSide(a.left, x) - evalSide(a.right, x);
+    const db = evalSide(b.left, x) - evalSide(b.right, x);
+    if (Math.abs(da - db) > 1e-9) return false;
+  }
+  return true;
+}
+
+function hasVar(list) { return list.some(t => t.v); }
+function solvedValue(eq) {
+  const lv = hasVar(eq.left), rv = hasVar(eq.right);
+  if (lv === rv) return null;
+  const varSide = lv ? eq.left : eq.right;
+  const conSide = lv ? eq.right : eq.left;
+  if (varSide.length !== 1 || conSide.length !== 1) return null;
+  if (conSide[0].v) return null;
+  if (varSide[0].coef !== 1) return null;
+  return conSide[0].coef;
+}
+/* 形如 ax = b 且 a≠±1：需要"两边同除以 a" */
+function needDivide(eq) {
+  const lv = hasVar(eq.left), rv = hasVar(eq.right);
+  if (lv === rv) return null;
+  const varSide = lv ? eq.left : eq.right;
+  const conSide = lv ? eq.right : eq.left;
+  if (varSide.length !== 1 || conSide.length !== 1 || conSide[0].v) return null;
+  const a = varSide[0].coef, b = conSide[0].coef;
+  if (a === 1) return null;
+  if (b % a !== 0) return null;      // 本页只出整数解，避免分数排版
+  return { a, b, x: b / a };
+}
+
+/* ============================================================
+   2. 题目生成
+   ============================================================ */
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = arr => arr[rnd(0, arr.length - 1)];
+const nz = (a, b) => { let v = 0; while (!v) v = rnd(a, b); return v; };
+
+/* x + b = d 或 b + x = d —— 只需一次移项 */
+function genL1() {
+  const x = nz(-9, 9), b = nz(-9, 9), d = x + b;
+  if (d === 0) return genL1();
+  if (Math.random() < .5) return { left: [mkTerm(b, 0), mkTerm(1, 1)], right: [mkTerm(d, 0)] };
+  return { left: [mkTerm(1, 1), mkTerm(b, 0)], right: [mkTerm(d, 0)] };
+}
+/* ax + b = cx + d —— 两边都有未知数 */
+function genL2() {
+  const x = nz(-6, 6);
+  let a = nz(2, 6), c = nz(1, 5);
+  if (a === c) c = a + 1;
+  const b = nz(-9, 9), d = (a - c) * x + b;
+  if (d === 0) return genL2();
+  return { left: [mkTerm(a, 1), mkTerm(b, 0)], right: [mkTerm(c, 1), mkTerm(d, 0)] };
+}
+/* ax + b = c —— 移项后合并 */
+function genL3() {
+  const x = nz(-6, 6), a = nz(2, 6), b = nz(-9, 9), c = a * x + b;
+  if (c === 0) return genL3();
+  return { left: [mkTerm(a, 1), mkTerm(b, 0)], right: [mkTerm(c, 0)] };
+}
+/* ax = b —— 需要两边同除 */
+function genL4() {
+  const x = nz(-6, 6), a = pick([2, 3, 4, 5, -2, -3, -4]);
+  if (x === 0) return genL4();
+  return { left: [mkTerm(a, 1)], right: [mkTerm(a * x, 0)] };
+}
+function buildTasks() {
+  return [genL1(), genL2(), genL1(), genL3(), genL2(), genL4(), genL3(), genL4()]
+    .map(eq => normalizeEq(eq));
+}
+
+/* ============================================================
+   3. 应用状态
+   ============================================================ */
+const stage = $('#stage');
+const fx = $('#fx');
+const ctx = fx.getContext('2d');
+const bridge = $('#bridge');
+const sideL = $('#sideL');
+const sideR = $('#sideR');
+const hintEl = $('#hint');
+const promptEl = $('#prompt');
+const doneEl = $('#done');
+const stepsEl = $('#steps');
+const aiEl = $('#ai');
+const statEl = $('#stat');
+
+const app = {
+  tasks: [],
+  idx: 0,
+  eq: null,
+  history: [],
+  steps: [],
+  mode: 'guide',          // guide | challenge
+  finished: false,
+  solvedAt: 0,
+  startedAt: Date.now(),
+  errors: 0,
+  doneCount: 0,
+};
+const g = {
+  hands: [],
+  cursor: { x: 0, y: 0 },
+  hasHand: false,
+  hovered: null,
+  grab: null,             // { id, el, startCursor }
+  fistFrames: 0,
+  openFrames: 0,
+  cooldownUntil: 0,
+  lostSince: 0,
+  pending: null,          // 挑战模式：等学生判符号 { termId, toSide }
+  pendingSince: 0,
+  signFrames: 0,
+  signVal: 0,
+  nearSince: 0,
+  farAt: 0,
+  noHandSince: 0,
+  lastHandAt: 0,
+  phase: 'idle',
+};
+const demo = { phase: 'idle', t0: 0, cardId: null, from: null, to: null, target: null, cursor: null, hands: [] };
+let lastVideoTime = -1;
+let lastHands = [];
+
+/* ============================================================
+   4. 渲染
+   ============================================================ */
+function termEl(t, isFirst) {
+  const el = document.createElement('div');
+  el.className = 'term';
+  el.dataset.id = t.id;
+  el.tabIndex = 0;
+  el.textContent = termText(t, isFirst);
+  el.setAttribute('aria-label', termText(t, isFirst) + '，可拖动');
+  el.addEventListener('click', () => onCardClick(t.id));
+  return el;
+}
+function renderEquation() {
+  sideL.innerHTML = '';
+  sideR.innerHTML = '';
+  if (!app.eq.left.length) sideL.innerHTML = '<span class="zero">0</span>';
+  else app.eq.left.forEach((t, i) => sideL.appendChild(termEl(t, i === 0)));
+  if (!app.eq.right.length) sideR.innerHTML = '<span class="zero">0</span>';
+  else app.eq.right.forEach((t, i) => sideR.appendChild(termEl(t, i === 0)));
+}
+function renderBoard() {
+  stepsEl.innerHTML = '';
+  app.steps.forEach(s => {
+    const li = document.createElement('li');
+    if (s.kind === 'err') li.className = 'err';
+    if (s.kind === 'ok') li.className = 'ok';
+    const kindCls = s.kind === 'p1' ? 'p1' : s.kind === 'p2' ? 'p2'
+      : s.kind === 'err' ? 'err' : s.kind === 'ok' ? 'ok' : 'p1';
+    li.innerHTML = `<div class="step"><span class="kind ${kindCls}">${s.tag}</span>${s.eq}</div>`
+                 + (s.note ? `<div class="note">${s.note}</div>` : '');
+    stepsEl.appendChild(li);
+  });
+  stepsEl.scrollTop = stepsEl.scrollHeight;
+}
+function renderPills() {
+  $('#handText').textContent = g.hasHand ? `识别到 ${g.hands.length} 只手` : '识别到 0 只手';
+  $('#pillHand').classList.toggle('paused', !g.hasHand);
+  $('#btnMode').textContent = app.mode === 'guide' ? '换成挑战模式' : '换成引导模式';
+  $('#pillMode').textContent = app.mode === 'guide' ? '引导模式' : '挑战模式';
+  $('#pillTask').textContent = `第 ${app.idx + 1} / ${app.tasks.length} 题`;
+  const sec = Math.floor((Date.now() - app.startedAt) / 1000);
+  statEl.textContent = `完成 ${app.doneCount} 题 · 用时 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} · 错误 ${app.errors} 次`;
+}
+function setHint(html, cls = '') {
+  hintEl.innerHTML = html;
+  hintEl.className = 'hint ' + cls;
+}
+function toast(html, cls = '') { setHint(html, cls); }
+function renderStat() {}
+
+/* ============================================================
+   5. 方程交互
+   ============================================================ */
+function pushStep(eqObj, note, tag, kind) {
+  app.steps.push({ eq: eqText(eqObj), note, tag, kind });
+  renderBoard();
+}
+function resetTask() {
+  app.eq = normalizeEq({ left: app.tasks[app.idx].left.map(t => ({ ...t })), right: app.tasks[app.idx].right.map(t => ({ ...t })) });
+  app.steps = [];
+  app.history = [];
+  app.finished = false;
+  app.solvedAt = 0;
+  g.pending = null;
+  g.grab = null;
+  g.hovered = null;
+  promptEl.hidden = true;
+  doneEl.hidden = true;
+  $('#btnDivide').hidden = true;
+  renderEquation();
+  pushStep(app.eq, '原方程 —— 先把左边的常数搬到右边。', '起点', 'start');
+  aiSay('把左边的常数搬到右边试试。');
+  setHint('伸手对准一张卡片，<b>握拳</b>抓住，拖过等号线后<b>张开手</b>放下。');
+  renderPills();
+}
+function aiSay(text) { aiEl.innerHTML = `<b>AI</b> ${text}`; }
+
+function addHistory() {
+  app.history.push({ eq: normalizeEq({ left: app.eq.left.map(t => ({ ...t })), right: app.eq.right.map(t => ({ ...t })) }), steps: app.steps.slice() });
+}
+
+/* 提交一次移项 */
+function commitMove(termId, toSide, flip) {
+  const before = app.eq;
+  const moved = moveTerm(before, termId, toSide, flip);
+  if (!moved) return;
+  const same = isEquivalent(before, moved);
+  addHistory();
+  const fromSide = toSide === 'left' ? '右' : '左';
+  const toLabel = toSide === 'left' ? '左' : '右';
+  const term = [...before.left, ...before.right].find(t => t.id === termId);
+  const label = termText(term, true);
+
+  app.eq = moved;
+  g.grab = null;
+  g.hovered = null;
+  g.cooldownUntil = clock() + CONFIG.COOLDOWN_MS;
+  renderEquation();
+
+  if (!same) {
+    app.errors++;
+    bridge.classList.add('bad');
+    $('#eq').classList.add('broken');
+    pushStep(moved, `把 ${label} 从${fromSide}边搬到${toLabel}边，却没有变号 —— 左右两边不再相等。`, '错误', 'err');
+    aiSay(`<b style="color:#f87171">❌ 移项必须变号。</b> 你把 ${label} 原样搬过去，等式两侧已经不相等了。请注意看等号在抖。`);
+    setHint('❌ 过桥不变号，等式不成立', 'bad');
+    setTimeout(() => {
+      $('#eq').classList.remove('broken');
+      bridge.classList.remove('bad');
+      app.eq = before;
+      app.steps.pop();
+      renderEquation();
+      renderBoard();
+      aiSay('这一手先撤销。记住：<b>过桥变号</b>，+5 过去就是 −5。');
+      setHint('再来一次：抓住卡片，拖过等号后松手。');
+    }, 1900);
+    renderPills();
+    return;
+  }
+
+  // 正确：变号移项
+  pushStep(moved, `移项：${label} 从${fromSide}边过桥到${toLabel}边 → ${termText({ ...term, coef: -term.coef }, true)}。`, '等式性质 1', 'p1');
+  aiSay(`✓ 过桥变号。等式两边同 ${term.coef > 0 ? '减' : '加'} ${Math.abs(term.coef)}，所以仍然相等。`);
+  setHint(`✓ ${label} 过桥变成 ${termText({ ...term, coef: -term.coef }, true)}，两边仍然相等`, 'ok');
+  renderPills();
+  checkProgress();
+}
+
+/* 两边同除 */
+function commitDivide() {
+  const nd = needDivide(app.eq);
+  if (!nd) return;
+  addHistory();
+  const before = app.eq;
+  app.eq = normalizeEq({
+    left: [{ ...mkTerm(1, 1) }],
+    right: [{ ...mkTerm(nd.x, 0) }],
+  });
+  renderEquation();
+  pushStep(app.eq, `两边同除以 ${nd.a}：${eqText(before)} → x = ${fmt(nd.x)}。`, '等式性质 2', 'p2');
+  aiSay(`✓ 两边同时除以 ${nd.a}，仍然相等。系数化为 1，得到 x = ${fmt(nd.x)}。`);
+  setHint(`✓ 两边同除以 ${nd.a} → x = ${fmt(nd.x)}`, 'ok');
+  g.cooldownUntil = clock() + 600;
+  renderPills();
+  checkProgress();
+}
+
+/* 检查是否解完 / 是否需要同除 */
+function checkProgress() {
+  const x = solvedValue(app.eq);
+  if (x !== null) {
+    app.finished = true;
+    app.solvedAt = clock();
+    app.doneCount++;
+    pushStep(app.eq, `两边相等，解得 x = ${fmt(x)}。`, '完成', 'ok');
+    aiSay(`✓ 解得 <b>x = ${fmt(x)}</b>。把 x = ${fmt(x)} 代回原方程，左右两边应该相等 —— 这就是检验。`);
+    setHint(`✓ 完成！x = ${fmt(x)}`, 'ok');
+    $('#doneBig').textContent = `✓ x = ${fmt(x)}`;
+    $('#doneSub').textContent = `代回原方程检验：${eqText(app.eq)}`;
+    doneEl.hidden = false;
+    renderPills();
+    if (DEMO) { demo.phase = 'idle'; demo.t0 = clock(); }
+    return;
+  }
+  const nd = needDivide(app.eq);
+  if (nd) {
+    $('#btnDivide').hidden = false;
+    setHint(`还差最后一步：两边同除以 <b>${nd.a}</b> —— <b>双手合拢</b>一下`, 'act');
+    aiSay(`系数是 ${nd.a}，要把它变成 1。把两只手从两边合拢，表示<b>两边同除以 ${nd.a}</b>。`);
+  } else {
+    $('#btnDivide').hidden = true;
+  }
+}
+
+function nextTask() {
+  app.idx = (app.idx + 1) % app.tasks.length;
+  resetTask();
+}
+function prevTask() {
+  app.idx = (app.idx - 1 + app.tasks.length) % app.tasks.length;
+  resetTask();
+}
+function undo() {
+  if (app.finished) { doneEl.hidden = true; app.finished = false; }
+  if (!app.history.length) return;
+  const h = app.history.pop();
+  app.eq = h.eq;
+  app.steps = h.steps;
+  g.pending = null;
+  promptEl.hidden = true;
+  renderEquation();
+  renderBoard();
+  checkProgress();
+  setHint('已撤销一步。');
+  aiSay('撤销一步，回到上一步的等式。');
+}
+
+/* ============================================================
+   6. 鼠标 / 键盘兜底
+   ============================================================ */
+let mouseSel = null;
+function onCardClick(id) {
+  if (app.finished) return;
+  if (g.pending) return;
+  mouseSel = id;
+  document.querySelectorAll('.term').forEach(el => el.classList.toggle('hover', el.dataset.id === id));
+  setHint('已选中这张卡片：再点一下目标的那一边（左半 / 右半），或按 ← / →。', 'act');
+  aiSay('鼠标也可以玩：点卡片选中，再点另一边放下。');
+}
+/* 点击舞台左右半区 = 放到那一侧 */
+stage.addEventListener('click', e => {
+  if (app.finished || g.pending) return;
+  if (e.target.closest('.term')) return;
+  if (e.target.closest('.done') || e.target.closest('.prompt')) return;
+  if (!mouseSel) return;
+  const r = stage.getBoundingClientRect();
+  const side = (e.clientX - r.left) < bridgeCenterX() ? 'left' : 'right';
+  const from = app.eq.left.some(t => t.id === mouseSel) ? 'left' : 'right';
+  if (side === from) { setHint('放回了同一边，不算移项。', 'act'); return; }
+  if (app.mode === 'challenge') askSign(mouseSel, side);
+  else commitMove(mouseSel, side, true);
+  mouseSel = null;
+});
+
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'z') { undo(); return; }
+  if (k === 'r') { resetTask(); return; }
+  if (k === 'n') { nextTask(); return; }
+  if (k === 'f') { toggleFull(); return; }
+  if (k === 'm') { toggleMode(); return; }
+  if (g.pending) {
+    if (e.key === '1' || e.key === '2') answerSign(e.key === '1');
+    return;
+  }
+  if (mouseSel) {
+    const from = app.eq.left.some(t => t.id === mouseSel) ? 'left' : 'right';
+    if (e.key === 'ArrowLeft' && from !== 'left') doMouseMove('left');
+    if (e.key === 'ArrowRight' && from !== 'right') doMouseMove('right');
+    if (e.key === 'Enter') doMouseMove(from === 'left' ? 'right' : 'left');
+  }
+});
+function doMouseMove(side) {
+  const id = mouseSel;
+  mouseSel = null;
+  document.querySelectorAll('.term').forEach(el => el.classList.remove('hover'));
+  if (app.mode === 'challenge') askSign(id, side);
+  else commitMove(id, side, true);
+}
+
+$('#btnUndo').addEventListener('click', undo);
+$('#btnReset').addEventListener('click', resetTask);
+$('#btnNext').addEventListener('click', nextTask);
+$('#btnNext2').addEventListener('click', nextTask);
+$('#btnAgain').addEventListener('click', resetTask);
+$('#btnMode').addEventListener('click', toggleMode);
+$('#btnDivide').addEventListener('click', commitDivide);
+$('#btnFull').addEventListener('click', toggleFull);
+$('#btnExport').addEventListener('click', exportCSV);
+$('#prompt').addEventListener('click', e => {
+  const opt = e.target.closest('.opt');
+  if (opt && g.pending) answerSign(opt.dataset.ans === '1');
+});
+
+function toggleMode() {
+  app.mode = app.mode === 'guide' ? 'challenge' : 'guide';
+  g.pending = null;
+  promptEl.hidden = true;
+  aiSay(app.mode === 'guide'
+    ? '引导模式：过桥后系统自动变号，适合老师讲解。'
+    : '挑战模式：过桥后先问"符号要变吗"，适合学生练习与诊断。');
+  renderPills();
+}
+function toggleFull() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.();
+}
+
+function exportCSV() {
+  const rows = [['题号', '步骤', '方程', '说明', '标签']];
+  app.steps.forEach((s, i) => rows.push([app.idx + 1, i + 1, s.eq, s.note, s.tag]));
+  const csv = '\ufeff' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `隔空过桥-第${app.idx + 1}题-记录.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ============================================================
+   7. 挑战模式：判符号
+   ============================================================ */
+function askSign(termId, toSide) {
+  g.pending = { termId, toSide };
+  g.pendingSince = clock();
+  g.signFrames = 0;
+  g.signVal = 0;
+  promptEl.hidden = false;
+  setHint('过桥了 —— 符号要变吗？<b>比 1 指</b>表示变号，<b>2 指</b>表示不变', 'act');
+}
+function answerSign(correct) {
+  if (!g.pending) return;
+  const { termId, toSide } = g.pending;
+  g.pending = null;
+  promptEl.hidden = true;
+  commitMove(termId, toSide, correct);
+  if (!correct) { /* commitMove 内部会展示错误与撤销 */ }
+}
+
+/* ============================================================
+   8. 手势处理
+   ============================================================ */
+const stageRect = () => stage.getBoundingClientRect();
+const bridgeCenterX = () => {
+  const r = bridge.getBoundingClientRect(), s = stageRect();
+  return r.left + r.width / 2 - s.left;
+};
+function cardCenter(id) {
+  const el = document.querySelector(`.term[data-id="${id}"]`);
+  if (!el) return { x: stageRect().width / 2, y: stageRect().height / 2 };
+  const r = el.getBoundingClientRect(), s = stageRect();
+  return { x: r.left + r.width / 2 - s.left, y: r.top + r.height / 2 - s.top };
+}
+function cardAt(pt) {
+  const s = stageRect();
+  const els = stage.querySelectorAll('.term[data-id]');
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    if (pt.x >= r.left - s.left - CONFIG.HOVER_PAD && pt.x <= r.right - s.left + CONFIG.HOVER_PAD &&
+        pt.y >= r.top - s.top - CONFIG.HOVER_PAD && pt.y <= r.bottom - s.top + CONFIG.HOVER_PAD) {
+      return el;
+    }
+  }
+  return null;
+}
+/* 摄像头归一化坐标 → 舞台坐标（水平镜像；按画面宽高比等比放大） */
+function toStage(x, y) {
+  const s = stageRect();
+  const aspect = (video.videoWidth && video.videoHeight)
+    ? video.videoWidth / video.videoHeight : 4 / 3;
+  const k = s.height * CONFIG.CURSOR_GAIN;      // 每单位归一化 y 对应的舞台像素
+  return {
+    x: clamp(s.width / 2 + ((1 - x) - 0.5) * k * aspect, 4, s.width - 4),
+    y: clamp(s.height / 2 + (y - 0.5) * k, 4, s.height - 4),
+  };
+}
+const FINGERS = [[5, 6, 8], [9, 10, 12], [13, 14, 16], [17, 18, 20]];
+function palmCenter(lm) {
+  const ids = [0, 5, 9, 13, 17];
+  let x = 0, y = 0;
+  ids.forEach(i => { x += lm[i].x; y += lm[i].y; });
+  return { x: x / ids.length, y: y / ids.length };
+}
+function fingerCount(world, lm) {
+  const pts = (world && world.length >= 21) ? world : lm;
+  if (!pts || pts.length < 21) return 0;
+  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
+  return FINGERS.reduce((n, [mcp, pip, tip]) =>
+    n + (d(pts[tip], pts[0]) > d(pts[pip], pts[0]) * 1.08 ? 1 : 0), 0);
+}
+function handSize(lm) {
+  return Math.hypot(lm[9].x - lm[0].x, lm[9].y - lm[0].y);
+}
+
+function extractHands(res) {
+  const out = [];
+  const lms = res.landmarks || res.multiHandLandmarks || [];
+  const worlds = res.worldLandmarks || [];
+  for (let i = 0; i < lms.length; i++) {
+    const lm = lms[i];
+    if (!lm || lm.length < 21) continue;
+    const world = worlds[i];
+    const pc = palmCenter(lm);
+    out.push({
+      cursor: toStage(pc.x, pc.y),
+      count: fingerCount(world, lm),
+      size: handSize(lm),
+      lm,
+    });
+  }
+  // 越靠近镜头（手越大）越优先
+  out.sort((a, b) => b.size - a.size);
+  return out;
+}
+
+function updateGesture(t) {
+  const hands = g.hands;
+  g.hasHand = hands.length > 0;
+  if (g.hasHand) { g.lastHandAt = t; g.noHandSince = 0; }
+  else if (!g.noHandSince) g.noHandSince = t;
+
+  const p = hands[0] || null;
+  const raw = p ? p.cursor : (g.grab ? g.cursor : null);
+
+  // 光标平滑
+  if (raw) {
+    const dx = raw.x - g.cursor.x, dy = raw.y - g.cursor.y;
+    const dist = Math.hypot(dx, dy);
+    const w = dist > stageRect().width * 0.18 ? 0.62 : CONFIG.SMOOTH;
+    g.cursor.x += dx * w;
+    g.cursor.y += dy * w;
+  }
+
+  // ---------- 抓取中 ----------
+  if (g.grab) {
+    if (!p) {
+      if (!g.lostSince) g.lostSince = t;
+      if (t - g.lostSince > CONFIG.LOST_MS) cancelGrab();
+    } else {
+      g.lostSince = 0;
+      g.fistFrames = 0;
+      g.hovered = null;
+      const el = g.grab.el;
+      if (el) {
+        const d = { x: g.cursor.x - g.grab.startCursor.x, y: g.cursor.y - g.grab.startCursor.y };
+        el.style.transform = `translate(${d.x}px, ${d.y}px) scale(1.1)`;
+      }
+      // 过桥视觉
+      const cross = (g.cursor.x < bridgeCenterX()) !== g.grab.fromLeft;
+      bridge.classList.toggle('lit', cross);
+
+      if (p.count >= CONFIG.OPEN_FRAMES) {
+        g.openFrames++;
+        if (g.openFrames >= CONFIG.OPEN_FRAMES) releaseCard();
+      } else {
+        g.openFrames = 0;
+      }
+    }
+    return;
+  }
+
+  // ---------- 等学生判符号 ----------
+  if (g.pending) {
+    bridge.classList.remove('lit');
+    if (p && (p.count === 1 || p.count === 2)) {
+      if (p.count === g.signVal) g.signFrames++;
+      else { g.signVal = p.count; g.signFrames = 1; }
+      if (g.signFrames >= CONFIG.SIGN_FRAMES) {
+        answerSign(g.signVal === 1);
+        g.signFrames = 0;
+      }
+    } else {
+      g.signFrames = 0;
+      g.signVal = 0;
+    }
+    if (t - g.pendingSince > CONFIG.SIGN_TIMEOUT_MS) {
+      aiSay('等太久了，系统先按<b>变号</b>处理。挑战模式下请比 1 指（变号）或 2 指（不变）。');
+      answerSign(true);
+    }
+    return;
+  }
+
+  // ---------- 空闲：悬停 / 抓取 / 双手合拢 ----------
+  bridge.classList.remove('lit');
+  if (app.finished) { clearHover(); return; }
+
+  // 双手合拢 → 两边同除
+  if (checkDivide(hands, t)) return;
+
+  if (!p) {
+    clearHover();
+    g.fistFrames = 0;
+    if (t - g.noHandSince > 9000 && !SELFTEST) {
+      setHint('一直没有识别到手：请把手掌正对摄像头、离近一点，并保证光线充足。', 'bad');
+    }
+    return;
+  }
+
+  // 悬停高亮
+  const el = cardAt(g.cursor);
+  if (el !== g.hovered) {
+    document.querySelectorAll('.term.hover').forEach(n => n.classList.remove('hover'));
+    g.hovered = el;
+    if (el) el.classList.add('hover');
+  }
+
+  // 握拳抓取（连续 N 帧）
+  if (p.count === 0 && g.hovered) {
+    g.fistFrames++;
+    if (g.fistFrames >= CONFIG.FIST_FRAMES && t > g.cooldownUntil) {
+      startGrab(el, t);
+    }
+  } else {
+    g.fistFrames = 0;
+  }
+}
+
+function clearHover() {
+  g.hovered = null;
+  document.querySelectorAll('.term.hover').forEach(n => n.classList.remove('hover'));
+}
+function startGrab(el, t) {
+  if (!el) return;
+  const id = el.dataset.id;
+  const fromSide = app.eq.left.some(x => x.id === id) ? 'left' : 'right';
+  g.grab = {
+    id, el,
+    fromLeft: fromSide === 'left',
+    startCursor: { ...g.cursor },
+  };
+  el.classList.add('grabbed');
+  el.classList.remove('hover');
+  g.fistFrames = 0;
+  g.openFrames = 0;
+  g.lostSince = 0;
+  bridge.classList.add('lit');
+  setHint('抓住了！拖过等号线，然后<b>张开手</b>放下。', 'act');
+}
+function cancelGrab() {
+  if (!g.grab) return;
+  const el = g.grab.el;
+  if (el) {
+    el.classList.remove('grabbed');
+    el.style.transform = '';
+  }
+  g.grab = null;
+  g.fistFrames = 0;
+  g.openFrames = 0;
+  g.lostSince = 0;
+  bridge.classList.remove('lit');
+  setHint('手离开了画面，卡片已放回。再试一次？', 'act');
+}
+function releaseCard() {
+  const grab = g.grab;
+  if (!grab) return;
+  const el = grab.el;
+  const toSide = g.cursor.x < bridgeCenterX() ? 'left' : 'right';
+  const from = grab.fromLeft ? 'left' : 'right';
+
+  // 复位卡片视觉
+  if (el) { el.classList.remove('grabbed'); el.style.transform = ''; }
+  g.grab = null;
+  g.openFrames = 0;
+  g.fistFrames = 0;
+  bridge.classList.remove('lit');
+
+  if (toSide === from) {
+    renderEquation();
+    setHint('放回了同一边，这一次不算移项。把卡片拖过等号线再松手。', 'act');
+    aiSay('卡片要<b>越过等号</b>才算移项 —— 放到同一边等式没有变化。');
+    return;
+  }
+  if (app.mode === 'challenge') {
+    askSign(grab.id, toSide);
+  } else {
+    commitMove(grab.id, toSide, true);
+  }
+}
+
+/* 双手合拢 */
+function checkDivide(hands, t) {
+  const nd = needDivide(app.eq);
+  if (!nd || hands.length < 2) {
+    g.nearSince = 0;
+    return false;
+  }
+  const a = hands[0].cursor, b = hands[1].cursor;
+  const s = stageRect();
+  const gap = Math.hypot(a.x - b.x, a.y - b.y) / Math.min(s.width, s.height);
+  if (gap > CONFIG.TWO_HAND_FAR) { g.farAt = t; g.nearSince = 0; return false; }
+  if (gap < CONFIG.TWO_HAND_GAP) {
+    if (!g.nearSince) g.nearSince = t;
+    if (t - g.nearSince >= CONFIG.TWO_HAND_HOLD_MS && t - g.farAt < 3200) {
+      g.nearSince = 0;
+      commitDivide();
+      return true;
+    }
+  } else {
+    g.nearSince = 0;
+  }
+  return false;
+}
+
+/* ============================================================
+   9. 画布：光标、拖尾、过桥涟漪
+   ============================================================ */
+let trail = [];
+function resizeFx() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const r = stage.getBoundingClientRect();
+  fx.width = Math.round(r.width * dpr);
+  fx.height = Math.round(r.height * dpr);
+  fx.style.width = r.width + 'px';
+  fx.style.height = r.height + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function drawFx(t) {
+  const r = stage.getBoundingClientRect();
+  ctx.clearRect(0, 0, r.width, r.height);
+  if (!g.hasHand && !g.grab) { trail.length = 0; return; }
+
+  const active = !!g.grab;
+  const color = active ? '#fbbf24' : (g.hovered ? '#4dd0e1' : 'rgba(124,156,255,.85)');
+  trail.push({ x: g.cursor.x, y: g.cursor.y, t: 1 });
+  while (trail.length > 18) trail.shift();
+  trail.forEach((p, i) => { p.t = i / trail.length; });
+
+  // 拖尾
+  for (let i = 1; i < trail.length; i++) {
+    const p0 = trail[i - 1], p1 = trail[i];
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = p1.t * 0.35;
+    ctx.lineWidth = lerp(1, 9, p1.t);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // 光标
+  const cx = g.cursor.x, cy = g.cursor.y;
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 34);
+  grd.addColorStop(0, color);
+  grd.addColorStop(1, 'transparent');
+  ctx.globalAlpha = .35;
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(cx, cy, active ? 12 : 8, 0, Math.PI * 2); ctx.fill();
+
+  if (active) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+/* ============================================================
+   10. 摄像头预览（骨架）
+   ============================================================ */
+const CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const video = $('#video');
+const skel = $('#skel');
+const sctx = skel.getContext('2d');
+
+function drawPip(hands) {
+  const w = skel.width, h = skel.height;
+  sctx.save();
+  sctx.clearRect(0, 0, w, h);
+  sctx.fillStyle = '#060a0f';
+  sctx.fillRect(0, 0, w, h);
+  if (video.readyState >= 2) {
+    sctx.save();
+    sctx.scale(-1, 1);
+    sctx.drawImage(video, -w, 0, w, h);
+    sctx.restore();
+  }
+  // 只画"操作手"，避免多人入镜时画面太乱
+  const p = hands[0];
+  if (p && p.lm) {
+    sctx.strokeStyle = 'rgba(77,208,225,.85)';
+    sctx.lineWidth = 2;
+    CONNECTIONS.forEach(([a, b]) => {
+      sctx.beginPath();
+      sctx.moveTo((1 - p.lm[a].x) * w, p.lm[a].y * h);
+      sctx.lineTo((1 - p.lm[b].x) * w, p.lm[b].y * h);
+      sctx.stroke();
+    });
+    sctx.fillStyle = '#fbbf24';
+    p.lm.forEach(lm => {
+      sctx.beginPath();
+      sctx.arc((1 - lm.x) * w, lm.y * h, 2.2, 0, Math.PI * 2);
+      sctx.fill();
+    });
+  }
+  sctx.restore();
+}
+
+/* ============================================================
+   11. 彩排模式：脚本手势（走同一套交互代码）
+   ============================================================ */
+const demoStage = () => stageRect();
+function pickDemoMove() {
+  const { left, right } = app.eq;
+  const lv = hasVar(left), rv = hasVar(right);
+  // 两边都有 x：把系数小的 x 项移到另一边，先合并未知数（避免常数来回搬）
+  if (lv && rv) {
+    const lb = left.filter(t => t.v).sort((a, b) => Math.abs(a.coef) - Math.abs(b.coef))[0];
+    const rb = right.filter(t => t.v).sort((a, b) => Math.abs(a.coef) - Math.abs(b.coef))[0];
+    if (Math.abs(lb.coef) <= Math.abs(rb.coef)) return { termId: lb.id, from: 'left', to: 'right' };
+    return { termId: rb.id, from: 'right', to: 'left' };
+  }
+  // 只剩一边有 x：把这一边的常数搬走
+  if (lv) { const c = left.find(t => !t.v); if (c) return { termId: c.id, from: 'left', to: 'right' }; }
+  if (rv) { const c = right.find(t => !t.v); if (c) return { termId: c.id, from: 'right', to: 'left' }; }
+  return null;
+}
+function demoHands(t) {
+  const s = demoStage();
+  const dt = t - demo.t0;
+  switch (demo.phase) {
+    case 'idle': {
+      demo.hands = [];
+      if (app.finished) {
+        if (dt > 1700) { demo.t0 = t; nextTask(); }
+        return [];
+      }
+      if (needDivide(app.eq)) {
+        demo.phase = 'divide'; demo.t0 = t;
+        demo.hands = [
+          { cursor: { x: s.width * 0.30, y: s.height * 0.78 }, count: 0 },
+          { cursor: { x: s.width * 0.70, y: s.height * 0.78 }, count: 0 },
+        ];
+        return demo.hands;
+      }
+      const m = pickDemoMove();
+      if (!m) return [];
+      demo.cardId = m.termId; demo.from = m.from; demo.to = m.to;
+      demo.target = cardCenter(m.termId);
+      demo.phase = 'point'; demo.t0 = t;
+      return [{ cursor: demo.target, count: 1 }];
+    }
+    case 'point':
+      if (dt > 380) { demo.phase = 'fist'; demo.t0 = t; }
+      return [{ cursor: demo.target, count: 1 }];
+    case 'fist':
+      if (dt > 180) { demo.phase = 'drag'; demo.t0 = t; }
+      return [{ cursor: demo.target, count: 0 }];
+    case 'drag': {
+      const p = Math.min(1, dt / 850);
+      const ease = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      const dir = demo.to === 'left' ? -1 : 1;
+      const x = lerp(demo.target.x, bridgeCenterX() + dir * s.width * 0.17, ease);
+      demo.cursor = { x, y: demo.target.y };
+      if (p >= 1) { demo.phase = 'open'; demo.t0 = t; }
+      return [{ cursor: demo.cursor, count: 0 }];
+    }
+    case 'open': {
+      const dir = demo.to === 'left' ? -1 : 1;
+      const c = demo.cursor || { x: bridgeCenterX() + dir * s.width * 0.17, y: s.height / 2 };
+      if (dt > 160) { demo.phase = 'wait'; demo.t0 = t; }
+      return [{ cursor: c, count: 4 }];
+    }
+    case 'wait':
+      if (dt > 780) { demo.phase = 'idle'; demo.t0 = t; }
+      return [];
+    case 'divide': {
+      demo.hands = [];
+      const p = Math.min(1, dt / 900);
+      const half = lerp(0.20, 0.03, p) * s.width;
+      demo.hands = [
+        { cursor: { x: s.width / 2 - half, y: s.height * 0.72 }, count: 0 },
+        { cursor: { x: s.width / 2 + half, y: s.height * 0.72 }, count: 0 },
+      ];
+      if (dt > 1500) { demo.phase = 'idle'; demo.t0 = t; demo.hands = []; }
+      return demo.hands;
+    }
+    default:
+      return [];
+  }
+}
+
+/* ============================================================
+   12. 启动：摄像头 / 模型 / 主循环
+   ============================================================ */
+let handLandmarker = null;
+let running = false;
+
+async function startCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false,
+  });
+  video.srcObject = stream;
+  await video.play();
+}
+async function startEngine() {
+  const vision = await FilesetResolver.forVisionTasks(CONFIG.WASM_URL);
+  const base = { modelAssetPath: CONFIG.MODEL_URL };
+  try {
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: { ...base, delegate: 'GPU' },
+      runningMode: 'VIDEO', numHands: CONFIG.MAX_HANDS,
+      minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+    });
+  } catch (err) {
+    console.warn('GPU 初始化失败，降级 CPU：', err);
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: { ...base, delegate: 'CPU' },
+      runningMode: 'VIDEO', numHands: CONFIG.MAX_HANDS,
+      minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+    });
+  }
+}
+function detectHands() {
+  if (!video.videoWidth) return [];
+  if (video.currentTime === lastVideoTime) return lastHands;
+  lastVideoTime = video.currentTime;
+  try {
+    const res = handLandmarker.detectForVideo(video, performance.now());
+    lastHands = extractHands(res);
+  } catch (err) {
+    console.warn('识别出错：', err);
+    lastHands = [];
+    setHint('识别出错：' + (err?.message || err), 'bad');
+  }
+  return lastHands;
+}
+
+function loop(t) {
+  if (!running) return;
+  requestAnimationFrame(loop);
+  if (DEMO) { demo.hands = demoHands(t); g.hands = demo.hands; }
+  else { g.hands = detectHands(); lastHands = g.hands; }
+
+  updateGesture(t);
+  drawFx(t);
+  if (DEMO) drawDemoPip(); else drawPip(g.hands);
+  // 状态栏低频刷新
+  if (t - (loop._lastPill || 0) > 600) {
+    loop._lastPill = t;
+    renderPills();
+    if (DEMO && $('#pillDemo')) $('#pillDemo').hidden = false;
+  }
+}
+function drawDemoPip() {
+  const w = skel.width, h = skel.height;
+  sctx.save();
+  sctx.fillStyle = '#0d141d';
+  sctx.fillRect(0, 0, w, h);
+  sctx.fillStyle = 'rgba(251,191,36,.85)';
+  sctx.font = '600 22px -apple-system, "PingFang SC", sans-serif';
+  sctx.textAlign = 'center';
+  sctx.fillText('彩排模式 · 模拟手势', w / 2, h / 2 - 6);
+  sctx.font = '14px -apple-system, "PingFang SC", sans-serif';
+  sctx.fillStyle = 'rgba(157,176,198,.9)';
+  sctx.fillText('不会调用摄像头', w / 2, h / 2 + 22);
+  sctx.restore();
+}
+
+function boot(silent) {
+  stage.hidden = false;
+  app.tasks = buildTasks();
+  app.idx = 0;
+  resetTask();
+  resizeFx();
+  const s = stageRect();
+  g.cursor = { x: s.width / 2, y: s.height / 2 };
+  window.addEventListener('resize', () => { resizeFx(); renderPills(); });
+  if (!silent) { running = true; requestAnimationFrame(loop); }
+}
+
+$('#btnStart').addEventListener('click', async () => {
+  const btn = $('#btnStart');
+  btn.disabled = true;
+  btn.textContent = '正在启动摄像头与识别引擎…';
+  try {
+    await startCamera();
+    await startEngine();
+    $('#boot').hidden = true;
+    $('#app').hidden = false;
+    boot();
+    setHint('把手掌正对镜头，对准一张卡片；<b>握拳</b>抓住，拖过等号线后<b>张开手</b>放下。');
+  } catch (err) {
+    const b = $('#boot');
+    b.classList.add('err');
+    btn.textContent = '重新尝试';
+    btn.disabled = false;
+    let hint = '';
+    if (String(err).includes('Permission') || String(err).includes('NotAllowed'))
+      hint = '摄像头权限被拒绝。请在地址栏左侧的权限设置里允许摄像头，或改用 ?demo=1 彩排模式。';
+    else if (String(err).includes('NotFound') || String(err).includes('Requested device'))
+      hint = '没有找到摄像头。可以改用 ?demo=1 彩排模式。';
+    else hint = '启动失败。若用 file:// 直接打开会失败，请用本地服务器：python3 server.py 8080。';
+    if (!b.querySelector('.errbox')) {
+      const div = document.createElement('div');
+      div.className = 'errbox';
+      div.textContent = hint + '\n\n原始错误：' + (err?.message || err);
+      b.appendChild(div);
+    }
+    console.error(err);
+  }
+});
+
+/* 彩排模式：直接进入 */
+if (DEMO) {
+  $('#boot').hidden = true;
+  $('#app').hidden = false;
+  $('#pillDemo').hidden = false;
+  boot();
+  setHint('彩排模式：模拟手势自动演示（不调用摄像头）。');
+}
+
+/* ============================================================
+   13. 自动测试（?autotest=1）：不依赖 rAF，用假时钟驱动整条交互链路
+   ------------------------------------------------------------
+   headless 浏览器里 rAF 不一定跑得起来；这里直接把"彩排手势"
+   以 60fps 的假时间喂给 updateGesture，验证：
+   抓取 → 过桥 → 变号 → 合并 → 同除 → 解出 是否真的走得通。
+   ============================================================ */
+function autotest() {
+  $('#boot').hidden = true;
+  $('#app').hidden = false;
+  $('#pillDemo').hidden = true;
+  boot(true);
+  const log = [];
+  const beforeErrors = app.errors;
+  let t = 0, frames = 0;
+  for (; t < 240000; t += 16) {
+    fakeNow = t;
+    demo.hands = demoHands(t);
+    g.hands = demo.hands;
+    updateGesture(t);
+    frames++;
+    if (app.doneCount >= 4) break;
+  }
+  const ok = app.doneCount >= 4 && app.errors === beforeErrors;
+  document.title = ok ? 'AUTOTEST OK' : 'AUTOTEST FAIL';
+  document.body.dataset.autotest = JSON.stringify({
+    ok, frames, done: app.doneCount, errors: app.errors, phase: demo.phase, t,
+    tasks: app.tasks.map(eqText),
+    steps: app.steps.map(s => s.eq + ' | ' + s.tag),
+  });
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:0;z-index:999;background:#0b1017;color:#e8eef7;'
+    + 'padding:30px;font:15px/1.9 ui-monospace,monospace;overflow:auto';
+  box.innerHTML = `<h1>自动测试 · <span style="color:${ok ? '#34d399' : '#f87171'}">${ok ? '通过' : '失败'}</span></h1>`
+    + `<div>帧数 ${frames} · 完成 ${app.doneCount} 题 · 错误 ${app.errors} · 最后阶段 ${demo.phase} · 用时(假) ${(t / 1000).toFixed(1)}s</div>`
+    + `<pre>${log.join('\n')}</pre>`;
+  document.body.appendChild(box);
+  console.log('AUTOTEST', ok ? 'OK' : 'FAIL', { frames, done: app.doneCount, errors: app.errors });
+}
+
+/* ============================================================
+   14. 预览截图（?shot=1）：摆一个固定画面，供 previews/ 生成
+   ============================================================ */
+const SYNTH_HAND = [
+  [0.50, 0.90], [0.40, 0.83], [0.33, 0.76], [0.28, 0.70], [0.24, 0.64],
+  [0.43, 0.55], [0.39, 0.44], [0.37, 0.35], [0.36, 0.27],
+  [0.50, 0.53], [0.50, 0.39], [0.50, 0.30], [0.50, 0.22],
+  [0.57, 0.55], [0.61, 0.42], [0.63, 0.34], [0.65, 0.27],
+  [0.64, 0.60], [0.71, 0.51], [0.75, 0.45], [0.78, 0.39],
+].map(([x, y]) => ({ x, y, z: 0 }));
+
+function shot() {
+  $('#boot').hidden = true;
+  $('#app').hidden = false;
+  $('#pillDemo').hidden = true;
+  boot(true);
+  app.tasks = buildTasks();
+  app.tasks[1] = normalizeEq({
+    left: [mkTerm(3, 1), mkTerm(5, 0)],
+    right: [mkTerm(2, 1), mkTerm(11, 0)],
+  });
+  app.idx = 1;
+  resetTask();
+  // 先走一步：+5 过桥变号
+  commitMove(app.eq.left.find(t => !t.v).id, 'right', true);
+  // 停在"正把 2x 拖过桥"的瞬间
+  const target = app.eq.right.find(t => t.v);
+  const c = cardCenter(target.id);
+  const el = document.querySelector(`.term[data-id="${target.id}"]`);
+  g.hasHand = true;
+  const rr = el ? el.getBoundingClientRect() : { width: 90, height: 70 };
+  const dot = { x: c.x + rr.width / 2 - 4, y: c.y - rr.height / 2 + 2 };
+  g.hands = [{ lm: SYNTH_HAND, count: 0, cursor: dot }];
+  g.cursor = dot;
+  if (el) el.classList.add('hover');
+  resizeFx();
+  drawFx(0);
+  renderPills();
+  drawPip(g.hands);
+  setHint('伸手对准卡片，<b>握拳</b>抓住，拖过等号线后<b>张开手</b>放下。');
+  aiSay('把 2x 也搬到左边去，两边仍然相等。');
+}
+
+/* ============================================================
+   15. 自检（?selftest=1）：不启动摄像头，直接测方程引擎
+   ============================================================ */
+function selftest() {
+  const box = $('#selftest');
+  box.hidden = false;
+  $('#boot').hidden = true;
+  const results = [];
+  const eq = (L, R) => normalizeEq({ left: L.map(t => mkTerm(t[0], t[1])), right: R.map(t => mkTerm(t[0], t[1])) });
+  const t1 = eq([[3, 1], [5, 0]], [[2, 1], [11, 0]]);
+  results.push(['方程渲染', eqText(t1), eqText(t1) === '3x + 5 = 2x + 11']);
+  const id5 = t1.left[1].id;
+  const t2 = moveTerm(t1, id5, 'right', true);
+  results.push(['+5 过桥变号', eqText(t2), eqText(t2) === '3x = 2x + 6']);
+  results.push(['等价校验（正确移项）', String(isEquivalent(t1, t2)), isEquivalent(t1, t2)]);
+  const t2bad = moveTerm(t1, id5, 'right', false);
+  results.push(['等价校验（不变号）', String(isEquivalent(t1, t2bad)), !isEquivalent(t1, t2bad)]);
+  const t3 = moveTerm(t2, t2.right[0].id, 'left', true);
+  results.push(['第二次移项解出', eqText(t3), eqText(t3) === 'x = 6' && solvedValue(t3) === 6]);
+  const t4 = eq([[2, 1]], [[-8, 0]]);
+  results.push(['需要两边同除', JSON.stringify(needDivide(t4)), needDivide(t4)?.a === 2 && needDivide(t4)?.x === -4]);
+  const t5 = eq([[-1, 1]], [[7, 0]]);
+  results.push(['系数 −1 需要同除 −1', JSON.stringify(needDivide(t5)),
+    needDivide(t5)?.a === -1 && needDivide(t5)?.x === -7]);
+  const t6 = eq([[1, 1], [5, 0]], [[12, 0]]);
+  const t7 = moveTerm(t6, t6.left[1].id, 'right', true);
+  results.push(['单移项', eqText(t7), eqText(t7) === 'x = 7' && solvedValue(t7) === 7]);
+  const t8 = eq([[5, 1], [-3, 0]], [[2, 1], [9, 0]]);
+  const t9 = moveTerm(t8, t8.left[1].id, 'right', true);
+  const t10 = moveTerm(t9, t9.right[0].id, 'left', true);
+  results.push(['双移项+合并', eqText(t10), eqText(t10) === '3x = 12']);
+  results.push(['合并后需要同除', JSON.stringify(needDivide(t10)), needDivide(t10)?.a === 3 && needDivide(t10)?.x === 4]);
+  // 生成器：连续生成 200 题都不能出负数解/非整数
+  let genOk = true, genBad = '';
+  for (let i = 0; i < 60 && genOk; i++) {
+    for (const [name, gen] of [['L1', genL1], ['L2', genL2], ['L3', genL3], ['L4', genL4]]) {
+      const e = normalizeEq(gen());
+      const lv = hasVar(e.left), rv = hasVar(e.right);
+      if (!lv && !rv) { genOk = false; genBad = `${name}: ${eqText(e)}`; break; }
+    }
+  }
+  results.push(['随机题目生成 240 道', genOk ? 'OK' : ('异常 ' + genBad), genOk]);
+
+  const pass = results.filter(r => r[2]).length;
+  const allOk = pass === results.length;
+  box.innerHTML = `<h1>方程引擎自检 · <span class="${allOk ? 'ok' : 'bad'}">${pass}/${results.length} ${allOk ? '通过' : '未通过'}</span></h1>`
+    + '<div>这些用例覆盖：渲染、移项变号、等价校验、解出、同除、生成器。</div>'
+    + '<pre>' + results.map(([name, val, ok]) =>
+        `${ok ? '✓' : '✗'} ${name}\n    ${val}`).join('\n') + '</pre>';
+  document.title = allOk ? 'SELFTEST OK' : 'SELFTEST FAIL';
+  console.log('SELFTEST', allOk ? 'OK' : 'FAIL', results);
+}
+if (SELFTEST) selftest();
+if (AUTOTEST) autotest();
+if (SHOT) shot();
+
+/* 调试钩子（?debug=1）：便于维护时在控制台/自动化里驱动内部状态 */
+if (params.has('debug')) {
+  window.__bridge = {
+    app, g, demo, CONFIG,
+    askSign, answerSign, commitMove, commitDivide, undo, nextTask, prevTask, resetTask,
+    toggleMode, eqText, moveTerm, isEquivalent, needDivide, normalizeEq, mkTerm,
+  };
+}
+</script>
+</body>
+</html>

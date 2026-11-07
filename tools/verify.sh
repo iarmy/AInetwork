@@ -17,6 +17,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${PORT:-8080}"
 BASE="http://127.0.0.1:${PORT}"
 CHROME="${CHROME:-$(ls -d "$HOME"/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-mac-arm64/chrome-headless-shell 2>/dev/null | tail -1)}"
+# Playwright 缓存不存在时，退回 puppeteer 缓存的 chrome-headless-shell
+if [[ -z "${CHROME:-}" ]]; then
+  CHROME="$(ls -d "$HOME"/.cache/puppeteer/chrome-headless-shell/*/chrome-headless-shell-mac-arm64/chrome-headless-shell 2>/dev/null | tail -1)"
+fi
 
 pass=0; fail=0
 step() { printf '\n\033[1m── %s\033[0m\n' "$1"; }
@@ -119,6 +123,7 @@ else
     "课堂反馈:/gesture/gesture-edu/index.html"
     "手势数独:/gesture/gesture-shudu/shudu.html"
     "AI 巨型全息:/gesture/gesture-shudu/index.html"
+    "隔空过桥:/gesture/gesture-bridge/index.html?demo=1"
     "大运河:/grand_canal_project/index.html"
     "长征:/long-march/long-march.html"
     "加减法:/math_game/math_game.html"
@@ -147,6 +152,27 @@ else
     fi
     rm -rf "$profile" "$log"
   done
+fi
+
+# ---------- 5c. 隔空过桥：方程引擎 + 交互链路自检 ----------
+step "5c / 5  隔空过桥：引擎与交互链路"
+if [[ -n "$CHROME" && -x "$CHROME" ]]; then
+  ST="$("$CHROME" --headless --disable-gpu --no-sandbox --virtual-time-budget=6000 \
+        --dump-dom "$BASE/gesture/gesture-bridge/index.html?selftest=1" 2>/dev/null || true)"
+  AT="$("$CHROME" --headless --disable-gpu --no-sandbox --virtual-time-budget=12000 \
+        --dump-dom "$BASE/gesture/gesture-bridge/index.html?autotest=1" 2>/dev/null || true)"
+  if [[ "$ST" == *"SELFTEST OK"* ]]; then
+    ok "方程引擎自检通过（移项/等价/同除/生成器）"
+  else
+    bad "方程引擎自检未通过（打开 ?selftest=1 查看明细）"
+  fi
+  if [[ "$AT" == *"AUTOTEST OK"* ]]; then
+    ok "交互链路自测通过（抓取→过桥→变号→合并→同除→解出）"
+  else
+    bad "交互链路自测未通过（打开 ?autotest=1 查看明细）"
+  fi
+else
+  printf '  \033[33m·\033[0m 未找到 chrome-headless-shell，跳过\n'
 fi
 
 # ---------- 5b. 首页工具条吸附（真实滚动测量） ----------

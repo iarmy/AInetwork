@@ -116,27 +116,27 @@ function testPortalFilter() {
   const expect = (label, got, want) =>
     got === want ? ok(label, `得到 ${got}`) : bad(label, `期望 ${want}，实际 ${got}`);
 
-  expect('初始显示全部 10 张卡片', visible(), 10);
-  expect('初始计数文案', countEl.textContent, '共 10 个站点');
+  expect('初始显示全部 12 张卡片', visible(), 12);
+  expect('初始计数文案', countEl.textContent, '共 12 个站点');
 
-  click('gesture'); expect('筛选「手势互动」', visible(), 3);
-  click('class');   expect('筛选「课堂工具」', visible(), 4);
+  click('gesture'); expect('筛选「手势互动」', visible(), 4);
+  click('class');   expect('筛选「课堂工具」', visible(), 5);
   click('subject'); expect('筛选「学科演示」', visible(), 3);
-  click('all');     expect('回到「全部」', visible(), 10);
+  click('all');     expect('回到「全部」', visible(), 12);
 
   search('数独');   expect('搜索「数独」', visible(), 1);
   search('量水');   expect('搜索「量水」', visible(), 1);
-  search('摄像头'); expect('搜索「摄像头」命中标签', visible(), 3);
+  search('摄像头'); expect('搜索「摄像头」命中标签', visible(), 4);
   search('错题');   expect('搜索「错题」命中新增的启点卡片', visible(), 1);
   search('zzz不存在'); expect('搜索无结果', visible(), 0);
   expect('无结果时显示空状态', emptyEl.classList.contains('show'), true);
 
   search('手势'); click('class');   expect('「课堂工具」+「手势」交集', visible(), 0);
-  click('gesture'); expect('「手势互动」+「手势」交集', visible(), 3);
+  click('gesture'); expect('「手势互动」+「手势」交集', visible(), 4);
   expect('仅保留命中的分组标题', groups.filter(g => !g.hidden).length, 1);
 
   search(''); click('all');
-  expect('清空后恢复全部', visible(), 10);
+  expect('清空后恢复全部', visible(), 12);
 }
 
 /* ============================================================

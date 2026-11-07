@@ -26,6 +26,7 @@ fi
 PAGES=(
   "dianming/index.html:dianming"
   "gesture/gesture-demo/index.html:gesture-demo"
+  "gesture/gesture-bridge/index.html?shot=1:gesture-bridge"
   "grand_canal_project/index.html:grand-canal"
   "long-march/long-march.html:long-march"
   "math_game/math_game.html:math-game"

@@ -23,7 +23,7 @@ SKIP_DIRS = {".git", "node_modules", "previews", ".DS_Store"}
 
 # href="..." / src="..." / url(...)
 REF_RE = re.compile(
-    r"""(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)')|url\(\s*['"]?([^'")]+)['"]?\s*\)""",
+    r"""(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)')|(?<![\w$])url\(\s*['"]?([^'")]+)['"]?\s*\)""",
     re.IGNORECASE,
 )
 

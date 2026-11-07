@@ -4,7 +4,7 @@
 
 ## 一、站点清单
 
-首页按三类组织，共 **11 张站点卡片**（另有 1 个同目录子站点直通入口，合计 12 个页面入口）：
+首页按三类组织，共 **12 张站点卡片**（另有 1 个同目录子站点直通入口，合计 13 个页面入口）：
 
 ### 手势互动（需要摄像头）
 
@@ -13,6 +13,7 @@
 | 空中画函数 · 手势演示 | `gesture/gesture-demo/index.html` | 隔空画抛物线，AI 拟合解析式与 R²；双手对碰揭题。模型已本地化，**不联网也能跑** |
 | AI 手势课堂反馈 · 数学 | `gesture/gesture-edu/index.html` | 学生用手指比选项号（1~4 指 = A~D），实时统计全班答案分布，可定格 / 公布答案看正确率。内置 8 道小学数学题，支持 `?demo=1` 无摄像头彩排 |
 | AI 手势数独（多关卡版） | `gesture/gesture-shudu/shudu.html` | 食指移动光标、捏合选格与挑数字，把 1–9 填进九宫格，共 2 关。**依赖 jsDelivr CDN** |
+| 隔空过桥 · 移项解方程 | `gesture/gesture-bridge/index.html` | 隔空"搬项"过等号：握拳抓住、拖过桥、张开手放下，过桥变号并实时校验等式两边仍相等。引导 / 挑战两种模式，支持彩排、自检与记录导出。模型本地化，**离线可跑** |
 
 `gesture/gesture-shudu/` 下还有一套独立子站点，首页卡片里有直通按钮：
 
@@ -48,7 +49,7 @@ AInetwork/
 ├── server.py                   # 本地静态服务器
 ├── 启动导航页.command            # 双击即启动
 ├── GitHub-Pages-部署指南.md      # 部署到 GitHub Pages + 自有域名的教程
-├── previews/                   # 首页 11 张卡片的站点截图
+├── previews/                   # 首页 12 张卡片的站点截图
 ├── tools/
 │   ├── verify.sh               # 一键自检（逻辑 + 断链 + HTTP + 运行时）
 │   ├── test-logic.js           # 首页筛选 / 出题算法 的逻辑测试（node，无需浏览器）
@@ -60,6 +61,7 @@ AInetwork/
 ├── dianming/                   # 课堂点名
 ├── gesture/
 │   ├── gesture-demo/           # 空中画函数
+│   ├── gesture-bridge/         # 隔空过桥 · 移项解方程
 │   └── gesture-shudu/          # 手势数独（主）+ 巨型全息（子站点）
 ├── grand_canal_project/        # 大运河数字展厅
 ├── long-march/                 # 红军长征路线图（images/ 为途经城市历史影像，授权见 CREDITS.md）

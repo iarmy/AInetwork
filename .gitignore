@@ -17,3 +17,6 @@ npm-debug.log*
 # 本地临时文件
 *.log
 *.tmp
+
+# 本地记忆索引（memsearch）
+.memsearch/
